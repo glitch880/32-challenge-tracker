@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>32 Challenge</title>
+<title>32 Deck Challenge</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mana-font@1/css/mana.css">
 <style>
   body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#1d1d1f; margin:0; padding:24px; }
@@ -48,7 +48,7 @@
 </head>
 <body>
 <div id="app">
-  <h1>32 Challenge</h1>
+  <h1>32 Deck Commander Challenge</h1>
   <div class="sub">Commander color-identity tracker · <span class="shared-note">live-shared with everyone who has this link</span></div>
   <form id="gate" style="display:none">
     <input id="gate-pass" type="password" placeholder="passphrase" autocomplete="current-password">
@@ -130,13 +130,17 @@ console.assert(clampInt(-3)===0 && clampInt("2")===2 && clampInt("")===0, 'clamp
 const uniq = a => [...new Set(a)];
 console.assert(uniq(['a','a','b']).length===2, 'uniq broken');
 
+// ['G','W','U'] -> 'gwu' — Scryfall's exact color-identity filter (letter order irrelevant).
+const ciOf = cs => cs.join('').toLowerCase();
+console.assert(ciOf(['G','W','U'])==='gwu' && ciOf(['C'])==='c', 'ciOf broken');
+
 // Debounced commander typeahead → fills the row's <datalist>.
 // ponytail: 250ms debounce + min length keeps us within Scryfall's rate guidance.
-function suggest(rowId, q){
+function suggest(rowId, q, ci){
   clearTimeout(acTimers[rowId]);
   if(q.trim().length < 2) return;
   acTimers[rowId]=setTimeout(()=>{
-    fetch('https://api.scryfall.com/cards/search?order=name&q='+encodeURIComponent('is:commander '+q))
+    fetch('https://api.scryfall.com/cards/search?order=name&q='+encodeURIComponent(`is:commander id=${ci} ${q}`))
       .then(r=> r.ok ? r.json() : {data:[]})
       .then(j=>{
         const dl=document.getElementById('dl-'+rowId);
@@ -229,7 +233,7 @@ function renderSheet(){
       const inp=document.createElement('input');
       inp.className='entry'; inp.placeholder='commander…'; inp.dataset.row=idn.id;
       inp.setAttribute('list','dl-'+idn.id); inp.autocomplete='off';
-      inp.oninput=()=>{ saveField('entries', idn.id, inp.value); suggest(idn.id, inp.value); };
+      inp.oninput=()=>{ saveField('entries', idn.id, inp.value); suggest(idn.id, inp.value, ciOf(idn.c)); };
       row.appendChild(inp);
       const dl=document.createElement('datalist'); dl.id='dl-'+idn.id; row.appendChild(dl);
       row.insertAdjacentHTML('beforeend',

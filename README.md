@@ -1,4 +1,4 @@
-# 32 Challenge Tracker
+# 32 Deck Commander Challenge Tracker
 
 A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). It's a single static HTML page backed by Firebase Realtime Database, so everyone with the link edits the same sheet in real time.
 
@@ -14,7 +14,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 - **Win / loss counters** per deck (per person).
 - **Free-text notes** per deck — a description/tags line under each commander (e.g. "poison proliferate"), saved and synced.
 - **Lock a row** — freeze a built deck's commander + description (read-only); W/L stay editable.
-- **Commander autocomplete** — type to pick from a live [Scryfall](https://scryfall.com/) list of legal commanders; hover a filled-in name to preview the card art.
+- **Commander autocomplete** — type to pick from a live [Scryfall](https://scryfall.com/) list of legal commanders, filtered to that row's exact color identity; hover a filled-in name to preview the card art.
 - **Real mana symbols** for each color identity (via the [`mana-font`](https://mana.andrewgioia.com/) webfont).
 - **Live multi-person sync** — shared instantly across everyone with the link.
 
@@ -32,4 +32,12 @@ Want your own copy? It's one static file (`index.html`) plus the DB rules (`data
 - **Deck tags per deck** — multi-select archetype tags (mill, voltron, aristocrats, …). Note: Scryfall has no archetype-tag API (those live in the unsupported Tagger project), so this would be a curated list or free-form tags, not a Scryfall pull.
 - Export the whole thing to a printable sheet like the original image
 - Move ability to remove persons to behind another menu so you don't accideanlly do it.
-
+- When adding a new person, make them also add a passkey that they need to unlock their page so only those with the passkey can edit. 
+- Create a summary page
+    - First page that shows when you visit the page, you login via this one
+    - shows how many decks each person has (e.g how many filled slots of commands that are locked.) 
+        - Leaderboard format, order by amount of decks desc.
+        - show progress bars
+    - Player overall W/R
+- Improve UI design with more colors / dark mode
+- Support for partner / Background
