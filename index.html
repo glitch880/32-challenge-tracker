@@ -6,6 +6,8 @@
 <title>32 Deck Challenge</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mana-font@1/css/mana.css">
 <style>
+  /* Padding counts inside a width — without this, any full-width input overflows its row by its padding. */
+  *{ box-sizing:border-box; }
   /* Palette. Same token names in both schemes, so every rule below is written once. */
   :root{
     color-scheme: light dark;   /* themes native controls (number spinners, password field) for free */
@@ -61,9 +63,8 @@
   .lead .wr{ font-size:13px; color:var(--muted); width:120px; flex:none; text-align:right; }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
-  @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } .desc{ margin-left:0; } }
   .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
-  .desc{ flex:1 0 100%; margin-left:202px; border:none; border-bottom:1px dashed var(--border-soft); background:none; padding:3px 2px; font-size:12px; color:var(--muted); outline:none; }
+  .desc{ flex:1 1 100%; min-width:0; margin-left:202px;   /* shrink:1 — the 202px indent must not push the row wider than its grid column */ border:none; border-bottom:1px dashed var(--border-soft); background:none; padding:3px 2px; font-size:12px; color:var(--muted); outline:none; }
   .desc:focus{ border-bottom-color:var(--text); color:var(--text); }
   .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
   .lock:hover{ opacity:1; }
@@ -85,6 +86,22 @@
   #gate-msg{ font-size:13px; color:var(--error); }
   #cardpreview{ position:fixed; display:none; z-index:1000; pointer-events:none; }
   #cardpreview img{ width:240px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35); display:block; }
+
+  /* Mobile overrides MUST stay last: media queries add no specificity, so an equally-specific
+     base rule later in the file would silently win (that bug shipped once already). */
+  @media (max-width:640px){
+    body{ padding:12px; }
+    #app{ padding:16px; border-radius:12px; }
+    h1{ font-size:24px; }
+    .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; }
+    .row{ padding:10px 0; border-bottom:1px solid var(--border-soft); }
+    .pips{ width:auto; }              /* don't reserve 5-symbol width on a mono row */
+    input.entry{ flex:1 1 100%; }     /* commander gets its own full-width line */
+    .desc{ margin-left:0; }
+    .lead{ flex-wrap:wrap; gap:8px 10px; }
+    .lead .who{ flex:1 0 100%; width:auto; }
+    .lead .n, .lead .wr{ width:auto; }
+  }
 </style>
 </head>
 <body>
