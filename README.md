@@ -3,7 +3,8 @@
 A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). Static HTML + Firebase Realtime Database, hosted free on GitHub Pages.
 
 ## Files
-- `index.html` — the whole app. The only thing you edit by hand is the `firebaseConfig` block near the top.
+- `index.html` — the whole app. The only thing you edit by hand is the `firebaseConfig` block near the top (and, optionally, `SHARED_EMAIL` just below it).
+- `database.rules.json` — the Realtime Database security rules to paste into the Firebase console (step 3).
 
 ## Setup
 
@@ -18,23 +19,32 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 3. Paste it over the placeholder `firebaseConfig` at the top of `index.html`. The important field for this app is `databaseURL` — make sure it's present.
 
 ### 3. Set database rules
-In **Realtime Database → Rules**, paste this and **Publish**:
+In **Realtime Database → Rules**, paste the contents of [`database.rules.json`](database.rules.json) and **Publish**:
 
 ```json
 {
   "rules": {
     "challenge": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
 ```
 
-> ⚠️ **Tradeoff, be honest with yourself here:** these rules are open — anyone who has your `databaseURL` can read and write the `challenge` data. That's fine for a small trusted pod and keeps things zero-friction. If you ever want it locked down, options are: turn on **Anonymous Auth** and require `auth != null`, or gate writes behind a shared passphrase. Ask Claude Code to add that if you want it.
+These rules require an authenticated user, so only people who know the shared passphrase (step 4) can read or write the `challenge` data.
 
-### 4. Test locally
-Open `index.html` in a browser. You should see the pips and be able to add a person and type — the status line flips to `saved ✓`. Open it in a second tab to confirm edits sync live.
+### 4. Set up the shared passphrase
+The app is gated behind a single shared Firebase account. The passphrase is that account's password — Firebase validates it server-side, and it never lives in this repo or in `index.html`.
+
+1. In the console: **Build → Authentication → Get started**, then **Sign-in method → Email/Password → Enable**.
+2. **Authentication → Users → Add user**. Use the email that matches `SHARED_EMAIL` near the top of `index.html` (default `pod@32challenge.local`) and set the **password** to whatever passphrase you want the pod to use.
+3. Share that passphrase with your pals **out of band** (chat, in person) — not in the repo.
+
+> ⚠️ **Be honest about what's protected:** the Firebase *config* in `index.html` is not a secret — every Firebase web app ships it to the browser, so it's always visible in the deployed page. That's expected. Your actual protection is the rules above + the shared account: without the passphrase, no one can authenticate, so no one can read or write your data. The passphrase itself is never committed.
+
+### 5. Test locally
+Serve `index.html` over `localhost` (e.g. `python -m http.server`) rather than opening the file directly — Firebase Auth needs an http(s) origin, and `localhost` is an authorized domain by default. You should see a **passphrase prompt**; enter the shared passphrase to unlock the sheet, then add a person and type — the status line flips to `saved ✓`. Open a second tab to confirm edits sync live.
 
 ## Deploy to GitHub Pages
 1. Create a new GitHub repo (public is simplest for free Pages) and push `index.html` to it.

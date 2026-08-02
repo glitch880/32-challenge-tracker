@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "challenge": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

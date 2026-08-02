@@ -25,12 +25,22 @@
   .name-tag{ font-size:10px; color:#9a9aa0; width:60px; flex:none; margin-left:-4px; }
   input.entry{ flex:1; border:none; border-bottom:1px solid #cfcfd4; background:none; padding:5px 2px; font-size:14px; color:#1d1d1f; outline:none; min-width:0; }
   input.entry:focus{ border-bottom-color:#1d1d1f; }
+  #gate{ display:flex; gap:8px; align-items:center; margin:16px 0; }
+  #gate input{ border:1px solid #d8d8dc; border-radius:8px; padding:8px 10px; font-size:14px; outline:none; }
+  #gate input:focus{ border-color:#1d1d1f; }
+  #gate button{ padding:8px 14px; border:none; border-radius:8px; background:#1d1d1f; color:#fff; font-size:14px; cursor:pointer; }
+  #gate-msg{ font-size:13px; color:#d3413c; }
 </style>
 </head>
 <body>
 <div id="app">
   <h1>32 Challenge</h1>
   <div class="sub">Commander color-identity tracker · <span class="shared-note">live-shared with everyone who has this link</span></div>
+  <form id="gate" style="display:none">
+    <input id="gate-pass" type="password" placeholder="passphrase" autocomplete="current-password">
+    <button type="submit">Enter</button>
+    <span id="gate-msg"></span>
+  </form>
   <div id="tabs" class="tabs"></div>
   <div id="status" class="status">Connecting…</div>
   <div id="sheet" class="sheet"></div>
@@ -39,6 +49,7 @@
 <!-- Firebase (compat build = no bundler needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <script>
 /* ============================================================
@@ -75,9 +86,16 @@ const IDENTITIES = [
   {id:'wubrg',name:'5-color',c:['W','U','B','R','G']},{id:'c',name:'Colorless',c:['C']}
 ];
 
+// Non-secret: identifies the shared Firebase account. The passphrase (that account's
+// password) is entered by the user and validated by Firebase Auth — never stored here.
+const SHARED_EMAIL = "pod@32challenge.local";
+
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
 const $status = document.getElementById('status');
+const $gate = document.getElementById('gate');
+const $gatePass = document.getElementById('gate-pass');
+const $gateMsg = document.getElementById('gate-msg');
 
 let db, root;
 let people = {};      // pushId -> name
@@ -92,7 +110,9 @@ function pips(colors){
   }).join('') + '</div>';
 }
 
-function start(){
+let started = false;
+
+function init(){
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
@@ -101,6 +121,23 @@ function start(){
     $status.textContent = 'Firebase not configured — paste your config at the top of the file.';
     return;
   }
+  // Gate the app behind the shared account. Firebase persists the session, so members
+  // enter the passphrase once per browser.
+  firebase.auth().onAuthStateChanged(user=>{
+    if(user){ $gate.style.display='none'; start(); }
+    else { $gate.style.display='flex'; }
+  });
+  $gate.addEventListener('submit', e=>{
+    e.preventDefault();
+    $gateMsg.textContent='';
+    firebase.auth().signInWithEmailAndPassword(SHARED_EMAIL, $gatePass.value)
+      .catch(()=>{ $gateMsg.textContent='wrong passphrase'; });
+  });
+}
+
+function start(){
+  if(started) return;   // ponytail: attach the live listener exactly once
+  started = true;
   root.on('value', snap=>{
     const data = snap.val() || {};
     people = data.people || {};
@@ -176,7 +213,7 @@ function removePerson(id,name){
   root.child('entries/'+id).remove();
 }
 
-start();
+init();
 </script>
 </body>
 </html>
