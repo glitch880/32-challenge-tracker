@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mana-font@1/css/mana.css">
 <style>
   body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#1d1d1f; margin:0; padding:24px; }
-  #app{ max-width:920px; margin:0 auto; }
+  #app{ max-width:1400px; margin:0 auto; }
   h1{ font-size:34px; margin:0 0 2px; font-weight:700; letter-spacing:-.5px; }
   .sub{ font-size:13px; color:#6b6b70; margin-bottom:16px; }
   .shared-note{ color:#8a6d3b; }
@@ -20,8 +20,11 @@
   .status{ font-size:13px; color:#8a8a8f; margin-bottom:10px; min-height:18px; }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
-  @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } }
-  .row{ display:flex; align-items:center; gap:10px; padding:4px 0; }
+  @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } .desc{ margin-left:0; } }
+  .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
+  .desc{ flex:1 0 100%; margin-left:202px; border:none; border-bottom:1px dashed #dcdce0; background:none; padding:3px 2px; font-size:12px; color:#6b6b70; outline:none; }
+  .desc:focus{ border-bottom-color:#1d1d1f; color:#1d1d1f; }
+  @media (min-width:1200px){ .desc{ flex:1 1 0; margin-left:0; min-width:0; } .wl{ order:1; } }
   .pips{ display:flex; gap:3px; width:132px; flex:none; }
   .pips .ms{ font-size:20px; }
   .name-tag{ font-size:10px; color:#9a9aa0; width:60px; flex:none; margin-left:-4px; }
@@ -111,6 +114,7 @@ let db, root;
 let people = {};      // pushId -> name
 let entries = {};     // pushId -> {rowId: text}
 let stats = {};       // pushId -> {rowId: {w,l}}
+let tags = {};        // pushId -> {rowId: text}  (free-text description per deck)
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
 const saveTimers = {};
@@ -178,6 +182,7 @@ function start(){
     people = data.people || {};
     entries = data.entries || {};
     stats = data.stats || {};
+    tags = data.tags || {};
     const ids = Object.keys(people);
     if(!current || !ids.includes(current)) current = ids[0] || null;
     renderTabs();
@@ -215,7 +220,7 @@ function renderSheet(){
       const inp=document.createElement('input');
       inp.className='entry'; inp.placeholder='commander…'; inp.dataset.row=idn.id;
       inp.setAttribute('list','dl-'+idn.id); inp.autocomplete='off';
-      inp.oninput=()=>{ saveEntry(idn.id, inp.value); suggest(idn.id, inp.value); };
+      inp.oninput=()=>{ saveField('entries', idn.id, inp.value); suggest(idn.id, inp.value); };
       row.appendChild(inp);
       const dl=document.createElement('datalist'); dl.id='dl-'+idn.id; row.appendChild(dl);
       row.insertAdjacentHTML('beforeend',
@@ -223,12 +228,17 @@ function renderSheet(){
         `<label>L</label><input type="number" min="0" class="lstat"></span>`);
       row.querySelector('.wstat').onchange = ()=>saveStat(idn.id);
       row.querySelector('.lstat').onchange = ()=>saveStat(idn.id);
+      const desc=document.createElement('input');
+      desc.className='desc'; desc.placeholder='description / tags…'; desc.dataset.row=idn.id;
+      desc.oninput=()=>saveField('tags', idn.id, desc.value);
+      row.appendChild(desc);
       $sheet.appendChild(row);
     });
     builtFor = current;
   }
   const data = entries[current] || {};
   const scur = stats[current] || {};
+  const tcur = tags[current] || {};
   $sheet.querySelectorAll('.row').forEach(row=>{
     const id = row.dataset.row;
     const inp = row.querySelector('input.entry');
@@ -237,6 +247,8 @@ function renderSheet(){
     const w = row.querySelector('.wstat'), l = row.querySelector('.lstat');
     if(w !== document.activeElement) w.value = s.w || 0;
     if(l !== document.activeElement) l.value = s.l || 0;
+    const d = row.querySelector('.desc');
+    if(d !== document.activeElement) d.value = tcur[id] || '';
   });
 }
 
@@ -250,11 +262,13 @@ function saveStat(rowId){
     .catch(()=>{ $status.textContent='save failed — check rules'; });
 }
 
-function saveEntry(rowId, val){
+// Debounced save for any per-row text node (entries=commander, tags=description).
+// Timer keyed by node+rowId so the two fields don't cancel each other.
+function saveField(node, rowId, val){
   $status.textContent='saving…';
-  clearTimeout(saveTimers[rowId]);
-  saveTimers[rowId]=setTimeout(()=>{
-    root.child('entries/'+current+'/'+rowId).set(val)
+  clearTimeout(saveTimers[node+rowId]);
+  saveTimers[node+rowId]=setTimeout(()=>{
+    root.child(node+'/'+current+'/'+rowId).set(val)
       .then(()=>{ $status.textContent='saved ✓'; setTimeout(()=>{ if($status.textContent==='saved ✓') $status.textContent=''; },1200); })
       .catch(()=>{ $status.textContent='save failed — check rules'; });
   },400);
@@ -272,6 +286,7 @@ function removePerson(id,name){
   root.child('people/'+id).remove();
   root.child('entries/'+id).remove();
   root.child('stats/'+id).remove();
+  root.child('tags/'+id).remove();
 }
 
 // Card-art hover preview — one shared floating <img>, delegated on the sheet so it also

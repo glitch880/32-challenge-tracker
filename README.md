@@ -12,6 +12,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 
 ## Features
 - **Win / loss counters** per deck (per person).
+- **Free-text notes** per deck — a description/tags line under each commander (e.g. "poison proliferate"), saved and synced.
 - **Commander autocomplete** — type to pick from a live [Scryfall](https://scryfall.com/) list of legal commanders; hover a filled-in name to preview the card art.
 - **Real mana symbols** for each color identity (via the [`mana-font`](https://mana.andrewgioia.com/) webfont).
 - **Live multi-person sync** — shared instantly across everyone with the link.
