@@ -18,6 +18,15 @@
   .tab .x:hover{ opacity:1; }
   .add{ padding:7px 12px; border:1px dashed #bbb; background:none; border-radius:999px; cursor:pointer; font-size:14px; color:#555; }
   .status{ font-size:13px; color:#8a8a8f; margin-bottom:10px; min-height:18px; }
+  #summary{ display:none; }
+  .lead{ display:flex; align-items:center; gap:14px; padding:10px 0; cursor:pointer; border-bottom:1px solid #f0f0f2; }
+  .lead:hover .who{ text-decoration:underline; }
+  .lead .who{ width:150px; flex:none; font-size:15px; font-weight:600; }
+  /* ponytail: plain div bar, not <progress> — cross-browser progress styling needs vendor pseudo-elements */
+  .bar{ flex:1; height:10px; background:#f0f0f2; border-radius:999px; overflow:hidden; min-width:0; }
+  .bar > i{ display:block; height:100%; background:#1d1d1f; }
+  .lead .n{ font-size:13px; color:#6b6b70; width:100px; flex:none; text-align:right; }
+  .lead .wr{ font-size:13px; color:#6b6b70; width:120px; flex:none; text-align:right; }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
   @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } .desc{ margin-left:0; } }
@@ -57,6 +66,7 @@
   </form>
   <div id="tabs" class="tabs"></div>
   <div id="status" class="status">Connecting…</div>
+  <div id="summary"></div>
   <div id="sheet" class="sheet"></div>
 </div>
 <div id="cardpreview"><img alt=""></div>
@@ -65,6 +75,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<!-- Pure logic, shared with test.js (run: node --test) -->
+<script src="logic.js"></script>
 
 <script>
 /* ============================================================
@@ -84,23 +97,7 @@ const firebaseConfig = {
 };
 /* ============================================================ */
 
-const IDENTITIES = [
-  {id:'c',name:'Colorless',c:['C']},
-  {id:'w',name:'White',c:['W']},{id:'u',name:'Blue',c:['U']},{id:'b',name:'Black',c:['B']},
-  {id:'r',name:'Red',c:['R']},{id:'g',name:'Green',c:['G']},
-  {id:'wu',name:'Azorius',c:['W','U']},{id:'ub',name:'Dimir',c:['U','B']},{id:'br',name:'Rakdos',c:['B','R']},
-  {id:'rg',name:'Gruul',c:['R','G']},{id:'gw',name:'Selesnya',c:['G','W']},{id:'wb',name:'Orzhov',c:['W','B']},
-  {id:'ur',name:'Izzet',c:['U','R']},{id:'bg',name:'Golgari',c:['B','G']},{id:'rw',name:'Boros',c:['R','W']},
-  {id:'gu',name:'Simic',c:['G','U']},
-  {id:'gwu',name:'Bant',c:['G','W','U']},{id:'wub',name:'Esper',c:['W','U','B']},{id:'ubr',name:'Grixis',c:['U','B','R']},
-  {id:'brg',name:'Jund',c:['B','R','G']},{id:'rgw',name:'Naya',c:['R','G','W']},
-  {id:'wbg',name:'Abzan',c:['W','B','G']},{id:'urw',name:'Jeskai',c:['U','R','W']},{id:'bgu',name:'Sultai',c:['B','G','U']},
-  {id:'rwb',name:'Mardu',c:['R','W','B']},{id:'gur',name:'Temur',c:['G','U','R']},
-  {id:'wubr',name:'Artifice',c:['W','U','B','R']},{id:'ubrg',name:'Chaos',c:['U','B','R','G']},
-  {id:'brgw',name:'Aggro',c:['B','R','G','W']},{id:'rgwu',name:'Altruism',c:['R','G','W','U']},
-  {id:'gwub',name:'Growth',c:['G','W','U','B']},
-  {id:'wubrg',name:'5-color',c:['W','U','B','R','G']}
-];
+// IDENTITIES and the pure helpers live in logic.js.
 
 // Non-secret: identifies the shared Firebase account. The passphrase (that account's
 // password) is entered by the user and validated by Firebase Auth — never stored here.
@@ -108,6 +105,7 @@ const SHARED_EMAIL = "pod@32challenge.local";
 
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
+const $summary = document.getElementById('summary');
 const $status = document.getElementById('status');
 const $gate = document.getElementById('gate');
 const $gatePass = document.getElementById('gate-pass');
@@ -124,23 +122,13 @@ let builtFor = null;  // which pushId the sheet DOM is built for
 const saveTimers = {};
 const acTimers = {};
 
-const clampInt = v => Math.max(0, Math.floor(+v || 0));
-console.assert(clampInt(-3)===0 && clampInt("2")===2 && clampInt("")===0, 'clampInt broken');
-
-const uniq = a => [...new Set(a)];
-console.assert(uniq(['a','a','b']).length===2, 'uniq broken');
-
-// ['G','W','U'] -> 'gwu' — Scryfall's exact color-identity filter (letter order irrelevant).
-const ciOf = cs => cs.join('').toLowerCase();
-console.assert(ciOf(['G','W','U'])==='gwu' && ciOf(['C'])==='c', 'ciOf broken');
-
 // Debounced commander typeahead → fills the row's <datalist>.
 // ponytail: 250ms debounce + min length keeps us within Scryfall's rate guidance.
 function suggest(rowId, q, ci){
   clearTimeout(acTimers[rowId]);
   if(q.trim().length < 2) return;
   acTimers[rowId]=setTimeout(()=>{
-    fetch('https://api.scryfall.com/cards/search?order=name&q='+encodeURIComponent(`is:commander id=${ci} ${q}`))
+    fetch('https://api.scryfall.com/cards/search?order=name&q='+encodeURIComponent(commanderQuery(ci, q)))
       .then(r=> r.ok ? r.json() : {data:[]})
       .then(j=>{
         const dl=document.getElementById('dl-'+rowId);
@@ -149,12 +137,6 @@ function suggest(rowId, q, ci){
           .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
       }).catch(()=>{});
   },250);
-}
-
-function pips(colors){
-  return '<div class="pips">' +
-    colors.map(k=>`<i class="ms ms-${k.toLowerCase()} ms-cost"></i>`).join('') +
-    '</div>';
 }
 
 let started = false;
@@ -193,9 +175,9 @@ function start(){
     tags = data.tags || {};
     locks = data.locks || {};
     const ids = Object.keys(people);
-    if(!current || !ids.includes(current)) current = ids[0] || null;
+    if(current && !ids.includes(current)) current = null;   // removed person -> back to summary
     renderTabs();
-    renderSheet();
+    renderView();
     $status.textContent = '';
   }, err=>{
     $status.textContent = 'Read failed — check your database rules.';
@@ -204,12 +186,17 @@ function start(){
 
 function renderTabs(){
   $tabs.innerHTML='';
+  const ov=document.createElement('div');
+  ov.className='tab'+(current===null?' active':'');
+  ov.textContent='Overview';
+  ov.onclick=()=>{ current=null; renderView(); renderTabs(); };
+  $tabs.appendChild(ov);
   Object.entries(people).forEach(([id,name])=>{
     const b=document.createElement('div');
     b.className='tab'+(id===current?' active':'');
     b.innerHTML=`<span class="lbl"></span><span class="x">✕</span>`;
     b.querySelector('.lbl').textContent=name;
-    b.querySelector('.lbl').onclick=()=>{ current=id; renderSheet(); renderTabs(); };
+    b.querySelector('.lbl').onclick=()=>{ current=id; renderView(); renderTabs(); };
     b.querySelector('.x').onclick=(e)=>{ e.stopPropagation(); removePerson(id,name); };
     $tabs.appendChild(b);
   });
@@ -218,8 +205,34 @@ function renderTabs(){
   $tabs.appendChild(add);
 }
 
+// current === null -> summary/leaderboard; otherwise that person's sheet.
+function renderView(){
+  const onSummary = !current;
+  // Explicit 'block' — '' would fall back to the stylesheet, and #summary defaults to none.
+  $summary.style.display = onSummary ? 'block' : 'none';
+  $sheet.style.display   = onSummary ? 'none' : '';   // '' restores the stylesheet's grid
+  onSummary ? renderSummary() : renderSheet();
+}
+
+function renderSummary(){
+  const rows = leaderboard(people, entries, stats, locks);
+  if(!rows.length){ $summary.innerHTML='<div class="sub">No players yet — add one to start.</div>'; return; }
+  $summary.innerHTML='';
+  rows.forEach(r=>{
+    const el=document.createElement('div');
+    el.className='lead';
+    el.innerHTML =
+      `<span class="who"></span>`+
+      `<span class="bar"><i style="width:${Math.round(100*r.built/r.total)}%"></i></span>`+
+      `<span class="n">${r.built}/${r.total} decks</span>`+
+      `<span class="wr">${r.pct===null ? '—' : `${r.w}–${r.l} (${r.pct}%)`}</span>`;
+    el.querySelector('.who').textContent = r.name;
+    el.onclick=()=>{ current=r.id; renderView(); renderTabs(); };
+    $summary.appendChild(el);
+  });
+}
+
 function renderSheet(){
-  if(!current){ $sheet.innerHTML='<div class="sub">No players yet — add one to start.</div>'; builtFor=null; return; }
   // Rebuild DOM only when switching person; otherwise just refresh values (keeps focus/cursor).
   if(builtFor !== current){
     $sheet.innerHTML='';
