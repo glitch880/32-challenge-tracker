@@ -58,7 +58,9 @@ Serve `index.html` over `localhost` (e.g. `python -m http.server`) rather than o
 - **Free tier** is way more than enough for a friend group (Firebase's free plan covers this easily).
 - Each person gets their own tab; edits to different tabs never clobber each other.
 
+## Features
+- **Win / loss counters per deck** — each row has W and L number fields; **Games Played is derived as W + L** (not stored separately). Stored per person under `challenge/stats/<personId>/<rowId>`.
+
 ## Ideas to add later
-- Win / loss / games-played counters per deck
 - Lock a deck once it's built
 - Export the whole thing to a printable sheet like the original image
