@@ -48,8 +48,9 @@
   .tabs{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:16px; }
   .tab{ padding:7px 14px; border:1px solid var(--border); background:var(--chip); border-radius:999px; cursor:pointer; font-size:14px; color:var(--chip-text); display:flex; align-items:center; gap:6px; }
   .tab.active{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
-  .tab .x{ opacity:.5; font-size:13px; }
-  .tab .x:hover{ opacity:1; }
+  #danger{ display:none; margin-top:32px; padding-top:16px; border-top:1px solid var(--border-soft); }
+  .remove{ padding:7px 14px; border:1px solid var(--border); background:none; border-radius:8px; cursor:pointer; font-size:13px; color:var(--muted); }
+  .remove:hover{ border-color:var(--error); color:var(--error); }
   .add{ padding:7px 12px; border:1px dashed var(--border); background:none; border-radius:999px; cursor:pointer; font-size:14px; color:var(--muted); }
   .status{ font-size:13px; color:var(--dim); margin-bottom:10px; min-height:18px; }
   #summary{ display:none; }
@@ -117,6 +118,7 @@
   <div id="status" class="status">Connecting…</div>
   <div id="summary"></div>
   <div id="sheet" class="sheet"></div>
+  <div id="danger"></div>
 </div>
 <div id="cardpreview"><img alt=""></div>
 
@@ -155,6 +157,7 @@ const SHARED_EMAIL = "pod@32challenge.local";
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
 const $summary = document.getElementById('summary');
+const $danger = document.getElementById('danger');
 const $status = document.getElementById('status');
 const $gate = document.getElementById('gate');
 const $gatePass = document.getElementById('gate-pass');
@@ -243,10 +246,8 @@ function renderTabs(){
   Object.entries(people).forEach(([id,name])=>{
     const b=document.createElement('div');
     b.className='tab'+(id===current?' active':'');
-    b.innerHTML=`<span class="lbl"></span><span class="x">✕</span>`;
-    b.querySelector('.lbl').textContent=name;
-    b.querySelector('.lbl').onclick=()=>{ current=id; renderView(); renderTabs(); };
-    b.querySelector('.x').onclick=(e)=>{ e.stopPropagation(); removePerson(id,name); };
+    b.textContent=name;   // no ✕ here — removal lives at the foot of that person's own sheet
+    b.onclick=()=>{ current=id; renderView(); renderTabs(); };
     $tabs.appendChild(b);
   });
   const add=document.createElement('button');
@@ -260,7 +261,19 @@ function renderView(){
   // Explicit 'block' — '' would fall back to the stylesheet, and #summary defaults to none.
   $summary.style.display = onSummary ? 'block' : 'none';
   $sheet.style.display   = onSummary ? 'none' : '';   // '' restores the stylesheet's grid
+  $danger.style.display  = onSummary ? 'none' : 'block';
   onSummary ? renderSummary() : renderSheet();
+  if(!onSummary) renderDanger();
+}
+
+// Removal lives at the foot of the person's own sheet — you have to be on their page and
+// scroll past all 32 rows, rather than clicking a tiny ✕ next to the tab label.
+function renderDanger(){
+  const name = people[current] || '';
+  $danger.innerHTML = '<button class="remove"></button>';
+  const b = $danger.querySelector('.remove');
+  b.textContent = `Remove ${name} and all their decks`;
+  b.onclick = ()=>removePerson(current, name);
 }
 
 function renderSummary(){
