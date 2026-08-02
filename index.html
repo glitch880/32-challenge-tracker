@@ -24,6 +24,9 @@
   .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
   .desc{ flex:1 0 100%; margin-left:202px; border:none; border-bottom:1px dashed #dcdce0; background:none; padding:3px 2px; font-size:12px; color:#6b6b70; outline:none; }
   .desc:focus{ border-bottom-color:#1d1d1f; color:#1d1d1f; }
+  .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
+  .lock:hover{ opacity:1; }
+  .row.locked input.entry, .row.locked .desc{ color:#8a8a8f; }
   @media (min-width:1200px){ .desc{ flex:1 1 0; margin-left:0; min-width:0; } .wl{ order:1; } }
   .pips{ display:flex; gap:3px; width:132px; flex:none; }
   .pips .ms{ font-size:20px; }
@@ -115,6 +118,7 @@ let people = {};      // pushId -> name
 let entries = {};     // pushId -> {rowId: text}
 let stats = {};       // pushId -> {rowId: {w,l}}
 let tags = {};        // pushId -> {rowId: text}  (free-text description per deck)
+let locks = {};       // pushId -> {rowId: true}  (locked rows: commander+desc read-only)
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
 const saveTimers = {};
@@ -183,6 +187,7 @@ function start(){
     entries = data.entries || {};
     stats = data.stats || {};
     tags = data.tags || {};
+    locks = data.locks || {};
     const ids = Object.keys(people);
     if(!current || !ids.includes(current)) current = ids[0] || null;
     renderTabs();
@@ -217,6 +222,10 @@ function renderSheet(){
     IDENTITIES.forEach(idn=>{
       const row=document.createElement('div'); row.className='row'; row.dataset.row=idn.id;
       row.innerHTML = pips(idn.c) + `<span class="name-tag">${idn.name}</span>`;
+      const lock=document.createElement('button');
+      lock.className='lock'; lock.type='button';
+      lock.onclick=()=>toggleLock(idn.id);
+      row.appendChild(lock);
       const inp=document.createElement('input');
       inp.className='entry'; inp.placeholder='commander…'; inp.dataset.row=idn.id;
       inp.setAttribute('list','dl-'+idn.id); inp.autocomplete='off';
@@ -239,6 +248,7 @@ function renderSheet(){
   const data = entries[current] || {};
   const scur = stats[current] || {};
   const tcur = tags[current] || {};
+  const lcur = locks[current] || {};
   $sheet.querySelectorAll('.row').forEach(row=>{
     const id = row.dataset.row;
     const inp = row.querySelector('input.entry');
@@ -249,6 +259,12 @@ function renderSheet(){
     if(l !== document.activeElement) l.value = s.l || 0;
     const d = row.querySelector('.desc');
     if(d !== document.activeElement) d.value = tcur[id] || '';
+    const locked = !!lcur[id];
+    inp.readOnly = locked; d.readOnly = locked;
+    row.classList.toggle('locked', locked);
+    const lock = row.querySelector('.lock');
+    lock.textContent = locked ? '🔒' : '🔓';
+    lock.title = locked ? 'Unlock' : 'Lock';
   });
 }
 
@@ -264,6 +280,12 @@ function saveStat(rowId){
 
 // Debounced save for any per-row text node (entries=commander, tags=description).
 // Timer keyed by node+rowId so the two fields don't cancel each other.
+function toggleLock(rowId){
+  const locked = !!(locks[current]||{})[rowId];
+  const ref = root.child('locks/'+current+'/'+rowId);
+  locked ? ref.remove() : ref.set(true);   // remove on unlock keeps the node clean
+}
+
 function saveField(node, rowId, val){
   $status.textContent='saving…';
   clearTimeout(saveTimers[node+rowId]);
@@ -287,6 +309,7 @@ function removePerson(id,name){
   root.child('entries/'+id).remove();
   root.child('stats/'+id).remove();
   root.child('tags/'+id).remove();
+  root.child('locks/'+id).remove();
 }
 
 // Card-art hover preview — one shared floating <img>, delegated on the sheet so it also
