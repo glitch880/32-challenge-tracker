@@ -18,8 +18,9 @@
   .tab .x:hover{ opacity:1; }
   .add{ padding:7px 12px; border:1px dashed #bbb; background:none; border-radius:999px; cursor:pointer; font-size:14px; color:#555; }
   .status{ font-size:13px; color:#8a8a8f; margin-bottom:10px; min-height:18px; }
-  .sheet{ display:grid; grid-template-columns:1fr 1fr; gap:6px 28px; }
-  @media (max-width:640px){ .sheet{ grid-template-columns:1fr; } }
+  /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
+  .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
+  @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } }
   .row{ display:flex; align-items:center; gap:10px; padding:4px 0; }
   .pips{ display:flex; gap:3px; width:132px; flex:none; }
   .pips .ms{ font-size:20px; }
@@ -75,6 +76,7 @@ const firebaseConfig = {
 /* ============================================================ */
 
 const IDENTITIES = [
+  {id:'c',name:'Colorless',c:['C']},
   {id:'w',name:'White',c:['W']},{id:'u',name:'Blue',c:['U']},{id:'b',name:'Black',c:['B']},
   {id:'r',name:'Red',c:['R']},{id:'g',name:'Green',c:['G']},
   {id:'wu',name:'Azorius',c:['W','U']},{id:'ub',name:'Dimir',c:['U','B']},{id:'br',name:'Rakdos',c:['B','R']},
@@ -88,7 +90,7 @@ const IDENTITIES = [
   {id:'wubr',name:'Artifice',c:['W','U','B','R']},{id:'ubrg',name:'Chaos',c:['U','B','R','G']},
   {id:'brgw',name:'Aggro',c:['B','R','G','W']},{id:'rgwu',name:'Altruism',c:['R','G','W','U']},
   {id:'gwub',name:'Growth',c:['G','W','U','B']},
-  {id:'wubrg',name:'5-color',c:['W','U','B','R','G']},{id:'c',name:'Colorless',c:['C']}
+  {id:'wubrg',name:'5-color',c:['W','U','B','R','G']}
 ];
 
 // Non-secret: identifies the shared Firebase account. The passphrase (that account's
