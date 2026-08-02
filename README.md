@@ -17,6 +17,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 - **Lock a row** — freeze a built deck's commander + description (read-only); W/L stay editable.
 - **Commander autocomplete** — type to pick from a live [Scryfall](https://scryfall.com/) list of legal commanders, filtered to that row's exact color identity; hover a filled-in name to preview the card art.
 - **Real mana symbols** for each color identity (via the [`mana-font`](https://mana.andrewgioia.com/) webfont).
+- **Light / dark theme** — follows your OS automatically (`prefers-color-scheme`), on a soft CSS-generated background instead of stark white.
 - **Live multi-person sync** — shared instantly across everyone with the link.
 
 ## Run your own
@@ -41,5 +42,4 @@ node --test
 - Export the whole thing to a printable sheet like the original image
 - Move ability to remove persons to behind another menu so you don't accideanlly do it.
 - When adding a new person, make them also add a passkey that they need to unlock their page so only those with the passkey can edit. 
-- Improve UI design with more colors / dark mode
 - Support for partner / Background

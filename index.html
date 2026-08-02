@@ -6,51 +6,83 @@
 <title>32 Deck Challenge</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mana-font@1/css/mana.css">
 <style>
-  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#1d1d1f; margin:0; padding:24px; }
-  #app{ max-width:1400px; margin:0 auto; }
+  /* Palette. Same token names in both schemes, so every rule below is written once. */
+  :root{
+    color-scheme: light dark;   /* themes native controls (number spinners, password field) for free */
+    --text:#1d1d1f; --muted:#6b6b70; --faint:#9a9aa0; --dim:#8a8a8f;
+    --panel:#fffdf9; --field:#fff;
+    --accent:#1d1d1f; --on-accent:#fff;
+    --chip:#f5f5f7; --chip-text:#333;
+    --border:#d8d8dc; --border-soft:#cfcfd4; --track:#f0f0f2;
+    --warn:#8a6d3b; --error:#d3413c;
+    --bg1:#f6f2ea; --bg2:#eceff3; --glow:rgba(255,255,255,.85);
+    --ink:0,0,0;                /* texture/shadow ink, per scheme */
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --text:#e8e8ea; --muted:#a0a2a8; --faint:#7c7f87; --dim:#8b8e96;
+      --panel:#23252a; --field:#1b1d21;
+      --accent:#e8e8ea; --on-accent:#1d1d1f;
+      --chip:#2c2f35; --chip-text:#d5d6da;
+      --border:#3a3d44; --border-soft:#33363c; --track:#2c2f35;
+      --warn:#c9a86a; --error:#ff6b66;
+      --bg1:#16171a; --bg2:#1f2126; --glow:rgba(255,255,255,.05);
+      --ink:255,255,255;
+    }
+  }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text);
+    margin:0; padding:24px; min-height:100vh;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40 L40 0' stroke='%23808080' stroke-opacity='.07'/%3E%3C/svg%3E"),
+      radial-gradient(1100px 600px at 15% -10%, var(--glow), transparent 60%),
+      linear-gradient(160deg, var(--bg1), var(--bg2));
+    background-attachment: fixed;   /* texture doesn't slide under a long sheet */
+  }
+  #app{ max-width:1400px; margin:0 auto; background:var(--panel); padding:28px; border-radius:16px; box-shadow:0 1px 3px rgba(var(--ink),.06), 0 8px 30px rgba(var(--ink),.05); }
   h1{ font-size:34px; margin:0 0 2px; font-weight:700; letter-spacing:-.5px; }
-  .sub{ font-size:13px; color:#6b6b70; margin-bottom:16px; }
-  .shared-note{ color:#8a6d3b; }
+  .sub{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .shared-note{ color:var(--warn); }
   .tabs{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:16px; }
-  .tab{ padding:7px 14px; border:1px solid #d8d8dc; background:#f5f5f7; border-radius:999px; cursor:pointer; font-size:14px; color:#333; display:flex; align-items:center; gap:6px; }
-  .tab.active{ background:#1d1d1f; color:#fff; border-color:#1d1d1f; }
+  .tab{ padding:7px 14px; border:1px solid var(--border); background:var(--chip); border-radius:999px; cursor:pointer; font-size:14px; color:var(--chip-text); display:flex; align-items:center; gap:6px; }
+  .tab.active{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
   .tab .x{ opacity:.5; font-size:13px; }
   .tab .x:hover{ opacity:1; }
-  .add{ padding:7px 12px; border:1px dashed #bbb; background:none; border-radius:999px; cursor:pointer; font-size:14px; color:#555; }
-  .status{ font-size:13px; color:#8a8a8f; margin-bottom:10px; min-height:18px; }
+  .add{ padding:7px 12px; border:1px dashed var(--border); background:none; border-radius:999px; cursor:pointer; font-size:14px; color:var(--muted); }
+  .status{ font-size:13px; color:var(--dim); margin-bottom:10px; min-height:18px; }
   #summary{ display:none; }
-  .lead{ display:flex; align-items:center; gap:14px; padding:10px 0; cursor:pointer; border-bottom:1px solid #f0f0f2; }
+  .lead{ display:flex; align-items:center; gap:14px; padding:10px 0; cursor:pointer; border-bottom:1px solid var(--border-soft); }
   .lead:hover .who{ text-decoration:underline; }
   .lead .who{ width:150px; flex:none; font-size:15px; font-weight:600; }
   /* ponytail: plain div bar, not <progress> — cross-browser progress styling needs vendor pseudo-elements */
-  .bar{ flex:1; height:10px; background:#f0f0f2; border-radius:999px; overflow:hidden; min-width:0; }
-  .bar > i{ display:block; height:100%; background:#1d1d1f; }
-  .lead .n{ font-size:13px; color:#6b6b70; width:100px; flex:none; text-align:right; }
-  .lead .wr{ font-size:13px; color:#6b6b70; width:120px; flex:none; text-align:right; }
+  .bar{ flex:1; height:10px; background:var(--track); border-radius:999px; overflow:hidden; min-width:0; }
+  .bar > i{ display:block; height:100%; background:var(--accent); }
+  .lead .n{ font-size:13px; color:var(--muted); width:100px; flex:none; text-align:right; }
+  .lead .wr{ font-size:13px; color:var(--muted); width:120px; flex:none; text-align:right; }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
   @media (max-width:640px){ .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; } .desc{ margin-left:0; } }
   .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
-  .desc{ flex:1 0 100%; margin-left:202px; border:none; border-bottom:1px dashed #dcdce0; background:none; padding:3px 2px; font-size:12px; color:#6b6b70; outline:none; }
-  .desc:focus{ border-bottom-color:#1d1d1f; color:#1d1d1f; }
+  .desc{ flex:1 0 100%; margin-left:202px; border:none; border-bottom:1px dashed var(--border-soft); background:none; padding:3px 2px; font-size:12px; color:var(--muted); outline:none; }
+  .desc:focus{ border-bottom-color:var(--text); color:var(--text); }
   .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
   .lock:hover{ opacity:1; }
-  .row.locked input.entry, .row.locked .desc{ color:#8a8a8f; }
+  .row.locked input.entry, .row.locked .desc{ color:var(--dim); }
   @media (min-width:1200px){ .desc{ flex:1 1 0; margin-left:0; min-width:0; } .wl{ order:1; } }
   .pips{ display:flex; gap:3px; width:132px; flex:none; }
   .pips .ms{ font-size:20px; }
-  .name-tag{ font-size:10px; color:#9a9aa0; width:60px; flex:none; margin-left:-4px; }
-  input.entry{ flex:1; border:none; border-bottom:1px solid #cfcfd4; background:none; padding:5px 2px; font-size:14px; color:#1d1d1f; outline:none; min-width:0; }
-  input.entry:focus{ border-bottom-color:#1d1d1f; }
+  .name-tag{ font-size:10px; color:var(--faint); width:60px; flex:none; margin-left:-4px; }
+  input.entry{ flex:1; border:none; border-bottom:1px solid var(--border-soft); background:none; padding:5px 2px; font-size:14px; color:var(--text); outline:none; min-width:0; }
+  input.entry:focus{ border-bottom-color:var(--text); }
   .wl{ display:flex; align-items:center; gap:4px; flex:none; }
-  .wl label{ font-size:10px; color:#9a9aa0; }
-  .wstat,.lstat{ width:42px; border:1px solid #d8d8dc; border-radius:6px; padding:3px 4px; font-size:13px; color:#1d1d1f; outline:none; }
-  .wstat:focus,.lstat:focus{ border-color:#1d1d1f; }
+  .wl label{ font-size:10px; color:var(--faint); }
+  .wstat,.lstat{ width:42px; border:1px solid var(--border); background:var(--field); border-radius:6px; padding:3px 4px; font-size:13px; color:var(--text); outline:none; }
+  .wstat:focus,.lstat:focus{ border-color:var(--text); }
   #gate{ display:flex; gap:8px; align-items:center; margin:16px 0; }
-  #gate input{ border:1px solid #d8d8dc; border-radius:8px; padding:8px 10px; font-size:14px; outline:none; }
-  #gate input:focus{ border-color:#1d1d1f; }
-  #gate button{ padding:8px 14px; border:none; border-radius:8px; background:#1d1d1f; color:#fff; font-size:14px; cursor:pointer; }
-  #gate-msg{ font-size:13px; color:#d3413c; }
+  #gate input{ border:1px solid var(--border); background:var(--field); color:var(--text); border-radius:8px; padding:8px 10px; font-size:14px; outline:none; }
+  #gate input:focus{ border-color:var(--text); }
+  #gate button{ padding:8px 14px; border:none; border-radius:8px; background:var(--accent); color:var(--on-accent); font-size:14px; cursor:pointer; }
+  #gate-msg{ font-size:13px; color:var(--error); }
   #cardpreview{ position:fixed; display:none; z-index:1000; pointer-events:none; }
   #cardpreview img{ width:240px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35); display:block; }
 </style>
