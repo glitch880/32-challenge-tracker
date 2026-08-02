@@ -59,7 +59,8 @@ Serve `index.html` over `localhost` (e.g. `python -m http.server`) rather than o
 - Each person gets their own tab; edits to different tabs never clobber each other.
 
 ## Features
-- **Win / loss counters per deck** — each row has W and L number fields; **Games Played is derived as W + L** (not stored separately). Stored per person under `challenge/stats/<personId>/<rowId>`.
+- **Win / loss counters per deck** — each row has W and L number fields, stored per person under `challenge/stats/<personId>/<rowId>`.
+- **Real mana symbols** — color identities render with the [`mana-font`](https://mana.andrewgioia.com/) webfont (loaded from jsDelivr).
 
 ## Ideas to add later
 - Lock a deck once it's built
