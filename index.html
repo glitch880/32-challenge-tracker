@@ -36,6 +36,8 @@
   #gate input:focus{ border-color:#1d1d1f; }
   #gate button{ padding:8px 14px; border:none; border-radius:8px; background:#1d1d1f; color:#fff; font-size:14px; cursor:pointer; }
   #gate-msg{ font-size:13px; color:#d3413c; }
+  #cardpreview{ position:fixed; display:none; z-index:1000; pointer-events:none; }
+  #cardpreview img{ width:240px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35); display:block; }
 </style>
 </head>
 <body>
@@ -51,6 +53,7 @@
   <div id="status" class="status">Connecting…</div>
   <div id="sheet" class="sheet"></div>
 </div>
+<div id="cardpreview"><img alt=""></div>
 
 <!-- Firebase (compat build = no bundler needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -111,9 +114,30 @@ let stats = {};       // pushId -> {rowId: {w,l}}
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
 const saveTimers = {};
+const acTimers = {};
 
 const clampInt = v => Math.max(0, Math.floor(+v || 0));
 console.assert(clampInt(-3)===0 && clampInt("2")===2 && clampInt("")===0, 'clampInt broken');
+
+const uniq = a => [...new Set(a)];
+console.assert(uniq(['a','a','b']).length===2, 'uniq broken');
+
+// Debounced commander typeahead → fills the row's <datalist>.
+// ponytail: 250ms debounce + min length keeps us within Scryfall's rate guidance.
+function suggest(rowId, q){
+  clearTimeout(acTimers[rowId]);
+  if(q.trim().length < 2) return;
+  acTimers[rowId]=setTimeout(()=>{
+    fetch('https://api.scryfall.com/cards/search?order=name&q='+encodeURIComponent('is:commander '+q))
+      .then(r=> r.ok ? r.json() : {data:[]})
+      .then(j=>{
+        const dl=document.getElementById('dl-'+rowId);
+        if(!dl) return;
+        dl.innerHTML = uniq((j.data||[]).map(c=>c.name)).slice(0,20)
+          .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+      }).catch(()=>{});
+  },250);
+}
 
 function pips(colors){
   return '<div class="pips">' +
@@ -190,8 +214,10 @@ function renderSheet(){
       row.innerHTML = pips(idn.c) + `<span class="name-tag">${idn.name}</span>`;
       const inp=document.createElement('input');
       inp.className='entry'; inp.placeholder='commander…'; inp.dataset.row=idn.id;
-      inp.oninput=()=>saveEntry(idn.id, inp.value);
+      inp.setAttribute('list','dl-'+idn.id); inp.autocomplete='off';
+      inp.oninput=()=>{ saveEntry(idn.id, inp.value); suggest(idn.id, inp.value); };
       row.appendChild(inp);
+      const dl=document.createElement('datalist'); dl.id='dl-'+idn.id; row.appendChild(dl);
       row.insertAdjacentHTML('beforeend',
         `<span class="wl"><label>W</label><input type="number" min="0" class="wstat">`+
         `<label>L</label><input type="number" min="0" class="lstat"></span>`);
@@ -247,6 +273,35 @@ function removePerson(id,name){
   root.child('entries/'+id).remove();
   root.child('stats/'+id).remove();
 }
+
+// Card-art hover preview — one shared floating <img>, delegated on the sheet so it also
+// catches rows built later. Image comes straight from Scryfall (fetched live, not stored).
+const $preview = document.getElementById('cardpreview');
+const $previewImg = $preview.querySelector('img');
+let hoverTimer;
+$previewImg.onerror = ()=>{ $preview.style.display='none'; };
+function positionPreview(e){
+  const w=250, h=352, pad=12;
+  let x=e.clientX+16, y=e.clientY+16;
+  if(x+w+pad > innerWidth)  x=e.clientX-w-16;
+  if(y+h+pad > innerHeight) y=innerHeight-h-pad;
+  if(y < pad) y=pad;
+  $preview.style.left=x+'px'; $preview.style.top=y+'px';
+}
+$sheet.addEventListener('mouseover', e=>{
+  const inp=e.target.closest('input.entry'); if(!inp || !inp.value.trim()) return;
+  positionPreview(e);
+  clearTimeout(hoverTimer);
+  hoverTimer=setTimeout(()=>{
+    $previewImg.src='https://api.scryfall.com/cards/named?format=image&version=normal&fuzzy='+encodeURIComponent(inp.value.trim());
+    $preview.style.display='block';
+  },200);
+});
+$sheet.addEventListener('mousemove', e=>{ if($preview.style.display==='block') positionPreview(e); });
+$sheet.addEventListener('mouseout', e=>{
+  if(!e.target.closest('input.entry')) return;
+  clearTimeout(hoverTimer); $preview.style.display='none';
+});
 
 init();
 </script>

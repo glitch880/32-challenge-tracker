@@ -12,6 +12,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 
 ## Features
 - **Win / loss counters** per deck (per person).
+- **Commander autocomplete** — type to pick from a live [Scryfall](https://scryfall.com/) list of legal commanders; hover a filled-in name to preview the card art.
 - **Real mana symbols** for each color identity (via the [`mana-font`](https://mana.andrewgioia.com/) webfont).
 - **Live multi-person sync** — shared instantly across everyone with the link.
 
@@ -26,5 +27,6 @@ Want your own copy? It's one static file (`index.html`) plus the DB rules (`data
 > The Firebase config in `index.html` is public by design (every Firebase web app ships it to the browser). Your data is protected by the rules + the shared passphrase, not by hiding the config.
 
 ## Ideas to add later
+- **Deck tags per deck** — multi-select archetype tags (mill, voltron, aristocrats, …). Note: Scryfall has no archetype-tag API (those live in the unsupported Tagger project), so this would be a curated list or free-form tags, not a Scryfall pull.
 - Lock a deck once it's built
 - Export the whole thing to a printable sheet like the original image
