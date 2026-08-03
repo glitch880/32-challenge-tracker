@@ -13,7 +13,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 ## Features
 - **Summary page** — the landing view, with two boards behind a toggle:
   - **Decks built** — one row per player, ranked by progress through the 32, with a progress bar and their overall W/L. A deck counts once its row is **locked** and names a commander.
-  - **Win rate** — one row per player *per deck*, ranked by that deck's win rate, so you can see which builds actually perform. Only built (locked + named) decks appear. More games breaks a rate tie — 5–0 outranks 1–0 — and a deck with no games yet shows `—` and sits at the bottom rather than counting as 0%.
+  - **Win rate** — one row per player *per deck*, showing the commander and its record, so you can see which builds actually perform. Only built (locked + named) decks appear. Rows show the raw win rate but are **ranked by the lower bound of the [Wilson score interval](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval)** at 95% confidence — a deck at 1–0 shows 100% but scores below one at 5–1, because one game is not evidence. Hover a row to see its rank score. A deck with no games yet shows `—` and sits at the bottom rather than counting as 0%.
 
   Clicking any row on either board opens that player's sheet.
 - **Win / loss counters** per deck (per person).

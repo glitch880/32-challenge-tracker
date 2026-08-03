@@ -342,7 +342,11 @@ function renderWinRateBoard(list){
       `<span class="wr">${record(r)}</span>`);
     el.querySelector('.who').textContent = r.player;
     el.querySelector('.cmd').textContent = r.commander;
-    el.title = `${r.identity} · ${r.player}`;
+    // The row shows the raw rate but ranks on the Wilson bound, so the tooltip names the
+    // score — otherwise a 100% deck sitting below an 83% one looks like a bug.
+    el.title = r.score===null
+      ? `${r.identity} · ${r.player} · no games yet`
+      : `${r.identity} · ${r.player} · rank score ${(100*r.score).toFixed(1)} (win rate adjusted for ${r.w+r.l} game${r.w+r.l===1?'':'s'})`;
   });
 }
 
