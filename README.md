@@ -35,8 +35,17 @@ Want your own copy? It's two static files (`index.html` + `logic.js`, no build s
 
 > The Firebase config in `index.html` is public by design (every Firebase web app ships it to the browser). Your data is protected by the rules + the shared passphrase, not by hiding the config.
 
+### Editing `logic.js`
+The script tag loads it as `logic.js?v=<hash>`. That query string is a content hash, and it matters: `index.html` and `logic.js` are separately cached URLs, so without it a browser can pair a fresh `index.html` with a stale `logic.js` and the page dies quietly. Run `node stamp.js` after editing `logic.js` and commit the updated `index.html` — or install the hook once and forget about it:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`node --test` fails on a stale stamp either way, so a wrong one can't ship.
+
 ## Tests
-The pure logic (deck tallying, win %, both boards' ordering, Scryfall query building, the 32-identity table) lives in `logic.js` and is covered by `test.js`. No dependencies — Node's built-in test runner:
+The pure logic (deck tallying, win %, both boards' ordering, Scryfall query building, the 32-identity table) lives in `logic.js` and is covered by `test.js`, along with a check that `index.html`'s cache stamp is current. No dependencies — Node's built-in test runner, also run on every push and PR by `.github/workflows/ci.yml`:
 
 ```bash
 node --test

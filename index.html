@@ -53,6 +53,7 @@
   .remove:hover{ border-color:var(--error); color:var(--error); }
   .add{ padding:7px 12px; border:1px dashed var(--border); background:none; border-radius:999px; cursor:pointer; font-size:14px; color:var(--muted); }
   .status{ font-size:13px; color:var(--dim); margin-bottom:10px; min-height:18px; }
+  .stale{ display:none; font-size:13px; color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
   #summary{ display:none; }
   .lead{ display:flex; align-items:center; gap:14px; padding:10px 0; cursor:pointer; border-bottom:1px solid var(--border-soft); }
   .lead:hover .who{ text-decoration:underline; }
@@ -124,6 +125,7 @@
   </form>
   <div id="tabs" class="tabs"></div>
   <div id="status" class="status">Connecting…</div>
+  <div id="stale" class="stale"></div>
   <div id="summary"></div>
   <div id="sheet" class="sheet"></div>
   <div id="danger"></div>
@@ -135,8 +137,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-<!-- Pure logic, shared with test.js (run: node --test) -->
-<script src="logic.js"></script>
+<!-- Pure logic, shared with test.js (run: node --test).
+     ?v= is a content hash written by stamp.js — do not edit it by hand. Without it a
+     browser can pair a fresh index.html with a cached logic.js and the boards die. -->
+<script src="logic.js?v=a09b8acb"></script>
 
 <script>
 /* ============================================================
@@ -167,6 +171,7 @@ const $sheet = document.getElementById('sheet');
 const $summary = document.getElementById('summary');
 const $danger = document.getElementById('danger');
 const $status = document.getElementById('status');
+const $stale = document.getElementById('stale');
 const $gate = document.getElementById('gate');
 const $gatePass = document.getElementById('gate-pass');
 const $gateMsg = document.getElementById('gate-msg');
@@ -201,7 +206,27 @@ function suggest(rowId, q, ci){
 
 let started = false;
 
+// A cached logic.js paired with a fresh index.html used to fail silently — the page came
+// up and a board just rendered nothing. Name every symbol this file needs and say which
+// ones are missing. typeof on an undeclared identifier is safe, and unlike window[...] it
+// also sees logic.js's top-level const bindings.
+function checkLogic(){
+  const missing = Object.entries({
+    IDENTITIES: typeof IDENTITIES, clampInt: typeof clampInt, uniq: typeof uniq,
+    ciOf: typeof ciOf, pips: typeof pips, commanderQuery: typeof commanderQuery,
+    tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
+    leaderboard: typeof leaderboard, winRateBoard: typeof winRateBoard,
+  }).filter(([,t])=> t==='undefined').map(([n])=> n);
+  if(!missing.length) return;
+  $stale.textContent =
+    `Your browser loaded an out-of-date logic.js (missing: ${missing.join(', ')}). `+
+    `Parts of this page won't work. Hard-refresh to fix it — Ctrl/⌘-Shift-R on desktop, `+
+    `or reload from the browser menu on mobile.`;
+  $stale.style.display = 'block';
+}
+
 function init(){
+  checkLogic();
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
@@ -304,7 +329,13 @@ function renderSummary(){
   $summary.appendChild(seg);
   const list=document.createElement('div');
   $summary.appendChild(list);
-  board==='decks' ? renderDeckBoard(list) : renderWinRateBoard(list);
+  // A board that throws must not leave a blank panel — that's the failure that shipped once.
+  try{
+    board==='decks' ? renderDeckBoard(list) : renderWinRateBoard(list);
+  }catch(e){
+    list.innerHTML = '<div class="sub">This board failed to render — try a hard refresh.</div>';
+    console.error('board render failed', e);
+  }
 }
 
 // A row opens that player's sheet, on either board.
