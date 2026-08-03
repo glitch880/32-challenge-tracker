@@ -137,34 +137,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-<!-- Pure logic, shared with test.js (run: node --test).
-     ?v= is a content hash written by stamp.js — do not edit it by hand. Without it a
-     browser can pair a fresh index.html with a cached logic.js and the boards die. -->
+<!-- Local scripts, both shared with test.js (run: node --test).
+     ?v= on each is a content hash written by stamp.js — do not edit those by hand.
+     Without them a browser can pair a fresh index.html with a cached copy of one of
+     these, and the page breaks in ways that don't announce themselves. -->
+<script src="config.js?v=93227651"></script>
 <script src="logic.js?v=a09b8acb"></script>
 
 <script>
-/* ============================================================
-   1) PASTE YOUR FIREBASE CONFIG HERE (see the setup steps).
-   Only databaseURL + apiKey + projectId are strictly needed
-   for Realtime Database, but paste the whole object.
-   ============================================================ */
-const firebaseConfig = {
-  apiKey: "AIzaSyBwXwdZso93ls8rc5VNUwgTXQhdiEZKSKs",
-  authDomain: "commander-32.firebaseapp.com",
-  databaseURL: "https://commander-32-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "commander-32",
-  storageBucket: "commander-32.firebasestorage.app",
-  messagingSenderId: "861515031209",
-  appId: "1:861515031209:web:f4beedd0aed9d745033fb8",
-  measurementId: "G-K7KX5L5ZYF"
-};
-/* ============================================================ */
-
-// IDENTITIES and the pure helpers live in logic.js.
-
-// Non-secret: identifies the shared Firebase account. The passphrase (that account's
-// password) is entered by the user and validated by Firebase Auth — never stored here.
-const SHARED_EMAIL = "pod@32challenge.local";
+// Deployment settings live in config.js (CONFIG); IDENTITIES and the pure helpers in
+// logic.js. Nothing configurable is hardcoded in this file.
 
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
@@ -207,11 +189,12 @@ function suggest(rowId, q, ci){
 let started = false;
 
 // A cached logic.js paired with a fresh index.html used to fail silently — the page came
-// up and a board just rendered nothing. Name every symbol this file needs and say which
-// ones are missing. typeof on an undeclared identifier is safe, and unlike window[...] it
-// also sees logic.js's top-level const bindings.
-function checkLogic(){
+// up and a board just rendered nothing. Name every symbol this file needs from config.js
+// and logic.js, and say which ones are missing. typeof on an undeclared identifier is
+// safe, and unlike window[...] it also sees their top-level const bindings.
+function checkScripts(){
   const missing = Object.entries({
+    CONFIG: typeof CONFIG,
     IDENTITIES: typeof IDENTITIES, clampInt: typeof clampInt, uniq: typeof uniq,
     ciOf: typeof ciOf, pips: typeof pips, commanderQuery: typeof commanderQuery,
     tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
@@ -219,20 +202,20 @@ function checkLogic(){
   }).filter(([,t])=> t==='undefined').map(([n])=> n);
   if(!missing.length) return;
   $stale.textContent =
-    `Your browser loaded an out-of-date logic.js (missing: ${missing.join(', ')}). `+
+    `Your browser loaded an out-of-date or missing script (no: ${missing.join(', ')}). `+
     `Parts of this page won't work. Hard-refresh to fix it — Ctrl/⌘-Shift-R on desktop, `+
     `or reload from the browser menu on mobile.`;
   $stale.style.display = 'block';
 }
 
 function init(){
-  checkLogic();
+  checkScripts();
   try{
-    firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(CONFIG.firebase);
     db = firebase.database();
     root = db.ref('challenge');
   }catch(e){
-    $status.textContent = 'Firebase not configured — paste your config at the top of the file.';
+    $status.textContent = 'Firebase not configured — check firebase settings in config.js.';
     return;
   }
   // Gate the app behind the shared account. Firebase persists the session, so members
@@ -244,7 +227,7 @@ function init(){
   $gate.addEventListener('submit', e=>{
     e.preventDefault();
     $gateMsg.textContent='';
-    firebase.auth().signInWithEmailAndPassword(SHARED_EMAIL, $gatePass.value)
+    firebase.auth().signInWithEmailAndPassword(CONFIG.sharedEmail, $gatePass.value)
       .catch(()=>{ $gateMsg.textContent='wrong passphrase'; });
   });
 }
