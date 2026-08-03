@@ -46,11 +46,15 @@ function tally(ent={}, st={}, lk={}){
 
 const winPct = (w,l) => (w+l) ? Math.round(100*w/(w+l)) : null;   // null = no games yet
 
+// pct===null means "no games yet" — unranked, not 0%. -1 parks those below a genuine 0%.
+const rank = r => r.pct===null ? -1 : r.pct;
+
+// Win rate leads the board; decks built breaks rate ties, name breaks the rest.
 function leaderboard(people, entries={}, stats={}, locks={}, total=IDENTITIES.length){
   return Object.entries(people).map(([id,name])=>{
     const t = tally(entries[id], stats[id], locks[id]);
     return {id, name, ...t, pct: winPct(t.w,t.l), total};
-  }).sort((a,b)=> b.built-a.built || a.name.localeCompare(b.name));
+  }).sort((a,b)=> rank(b)-rank(a) || b.built-a.built || a.name.localeCompare(b.name));
 }
 
 if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,leaderboard};

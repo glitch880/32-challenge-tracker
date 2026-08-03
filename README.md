@@ -11,7 +11,7 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 4. Everything saves automatically and syncs live for everyone on the link — each person has their own tab, so edits never clobber each other.
 
 ## Features
-- **Summary page** — the landing view: a leaderboard of everyone ordered by decks built, with progress bars out of 32 and overall W/L. A deck counts once its row is **locked**.
+- **Summary page** — the landing view: a leaderboard of everyone ordered by **win rate**, with progress bars out of 32 and overall W/L. Decks built breaks a rate tie, and anyone yet to play a game sits at the bottom as unranked (`—`) rather than 0%. A deck counts once its row is **locked**.
 - **Win / loss counters** per deck (per person).
 - **Free-text notes** per deck — a description/tags line under each commander (e.g. "poison proliferate"), saved and synced.
 - **Lock a row** — freeze a built deck's commander + description (read-only); W/L stay editable.
