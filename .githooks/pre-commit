@@ -1,0 +1,10 @@
+#!/bin/sh
+# Keeps index.html's logic.js?v= stamp in sync with logic.js, so a commit can never
+# ship the pair out of step. Opt in once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# Skipping the hook is not fatal — `node --test` fails on a stale stamp too.
+set -e
+node stamp.js
+git add index.html

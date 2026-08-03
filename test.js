@@ -224,6 +224,17 @@ test('winRateBoard on no people is empty', () => {
   assert.deepEqual(winRateBoard({}), []);
 });
 
+// ---- repo integrity -----------------------------------------------------------
+// Not logic: this catches a stale cache stamp before it ships, which is the failure
+// that blanked the win-rate board on the live site once.
+
+const {hashLogic, currentStamp} = require('./stamp.js');
+
+test('index.html carries the current logic.js hash', () => {
+  assert.equal(currentStamp(), hashLogic(),
+    'index.html is stale — run `node stamp.js` and commit it (stamp.js explains why)');
+});
+
 test('pips renders one mana symbol per colour', () => {
   const html = pips(['G','W']);
   assert.ok(html.includes('ms-g'));
