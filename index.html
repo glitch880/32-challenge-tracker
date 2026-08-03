@@ -62,6 +62,13 @@
   .bar > i{ display:block; height:100%; background:var(--accent); }
   .lead .n{ font-size:13px; color:var(--muted); width:100px; flex:none; text-align:right; }
   .lead .wr{ font-size:13px; color:var(--muted); width:120px; flex:none; text-align:right; }
+  .segmented{ display:flex; gap:6px; margin-bottom:14px; }
+  .seg{ padding:6px 13px; border:1px solid var(--border); background:var(--chip); color:var(--chip-text); border-radius:999px; cursor:pointer; font-size:13px; }
+  .seg.active{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  /* Win-rate rows carry their own colours, so they size to content instead of the sheet's fixed slot. */
+  .lead .pips{ width:auto; }
+  .lead .pips .ms{ font-size:16px; }
+  .lead .cmd{ flex:1; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
   .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
@@ -102,6 +109,7 @@
     .lead{ flex-wrap:wrap; gap:8px 10px; }
     .lead .who{ flex:1 0 100%; width:auto; }
     .lead .n, .lead .wr{ width:auto; }
+    .lead .cmd{ flex:1 1 100%; }      /* commander gets its own line, like the sheet's entry field */
   }
 </style>
 </head>
@@ -276,21 +284,65 @@ function renderDanger(){
   b.onclick = ()=>removePerson(current, name);
 }
 
+// Two boards: progress through the 32 (per player) and win rate (per player per deck).
+// They answer different questions, so they get a toggle rather than one merged ranking.
+const BOARDS = [['decks','Decks built'], ['winrate','Win rate']];
+let board = 'decks';
+
 function renderSummary(){
-  const rows = leaderboard(people, entries, stats, locks);
-  if(!rows.length){ $summary.innerHTML='<div class="sub">No players yet — add one to start.</div>'; return; }
   $summary.innerHTML='';
+  const seg=document.createElement('div');
+  seg.className='segmented';
+  BOARDS.forEach(([key,label])=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='seg'+(board===key?' active':'');
+    b.textContent=label;
+    b.onclick=()=>{ board=key; renderSummary(); };
+    seg.appendChild(b);
+  });
+  $summary.appendChild(seg);
+  const list=document.createElement('div');
+  $summary.appendChild(list);
+  board==='decks' ? renderDeckBoard(list) : renderWinRateBoard(list);
+}
+
+// A row opens that player's sheet, on either board.
+function leadRow(list, playerId, html){
+  const el=document.createElement('div');
+  el.className='lead';
+  el.innerHTML=html;
+  el.onclick=()=>{ current=playerId; renderView(); renderTabs(); };
+  list.appendChild(el);
+  return el;
+}
+
+const record = r => r.pct===null ? '—' : `${r.w}–${r.l} (${r.pct}%)`;
+
+function renderDeckBoard(list){
+  const rows = leaderboard(people, entries, stats, locks);
+  if(!rows.length){ list.innerHTML='<div class="sub">No players yet — add one to start.</div>'; return; }
   rows.forEach(r=>{
-    const el=document.createElement('div');
-    el.className='lead';
-    el.innerHTML =
+    const el = leadRow(list, r.id,
       `<span class="who"></span>`+
       `<span class="bar"><i style="width:${Math.round(100*r.built/r.total)}%"></i></span>`+
       `<span class="n">${r.built}/${r.total} decks</span>`+
-      `<span class="wr">${r.pct===null ? '—' : `${r.w}–${r.l} (${r.pct}%)`}</span>`;
+      `<span class="wr">${record(r)}</span>`);
     el.querySelector('.who').textContent = r.name;
-    el.onclick=()=>{ current=r.id; renderView(); renderTabs(); };
-    $summary.appendChild(el);
+  });
+}
+
+function renderWinRateBoard(list){
+  const rows = winRateBoard(people, entries, stats, locks);
+  if(!rows.length){ list.innerHTML='<div class="sub">No built decks yet — lock a row once its deck is done and it lands here.</div>'; return; }
+  rows.forEach(r=>{
+    // textContent for both names: commander text is player-supplied and must not be parsed as HTML.
+    const el = leadRow(list, r.playerId,
+      `<span class="who"></span>`+ pips(r.colors) +`<span class="cmd"></span>`+
+      `<span class="wr">${record(r)}</span>`);
+    el.querySelector('.who').textContent = r.player;
+    el.querySelector('.cmd').textContent = r.commander;
+    el.title = `${r.identity} · ${r.player}`;
   });
 }
 

@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert');
-const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,leaderboard} = require('./logic.js');
+const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,leaderboard,winRateBoard} = require('./logic.js');
 
 test('clampInt floors to a non-negative integer', () => {
   assert.equal(clampInt(-3), 0);
@@ -58,43 +58,25 @@ test('winPct rounds, and is null before any games', () => {
   assert.equal(winPct(5,0), 100);
 });
 
-test('leaderboard orders by win rate, desc', () => {
+test('leaderboard orders by decks built, desc', () => {
   const people = {p1:'Ann', p2:'Bob'};
-  const stats  = {p1:{a:{w:1,l:3}}, p2:{a:{w:3,l:1}}};   // 25% vs 75%
-  const rows = leaderboard(people, {}, stats, {});
+  const entries = {p1:{a:'X'}, p2:{a:'X', b:'Y'}};
+  const locks   = {p1:{a:true}, p2:{a:true, b:true}};
+  const rows = leaderboard(people, entries, {}, locks);
   assert.deepEqual(rows.map(r=>r.name), ['Bob','Ann']);
-  assert.equal(rows[0].pct, 75);
+  assert.equal(rows[0].built, 2);
 });
 
-test('win rate outranks decks built', () => {
+test('leaderboard ignores win rate when ranking', () => {
   const people  = {p1:'Ann', p2:'Bob'};
   const entries = {p1:{a:'X'}, p2:{a:'X', b:'Y'}};
   const locks   = {p1:{a:true}, p2:{a:true, b:true}};
   const stats   = {p1:{a:{w:9,l:1}}, p2:{a:{w:1,l:9}}};  // Ann 90% w/ 1 deck, Bob 10% w/ 2
   const rows = leaderboard(people, entries, stats, locks);
-  assert.deepEqual(rows.map(r=>r.name), ['Ann','Bob']);
+  assert.deepEqual(rows.map(r=>r.name), ['Bob','Ann']);   // decks win — rate lives on its own board
 });
 
-test('decks built breaks a win-rate tie', () => {
-  const people  = {p1:'Ann', p2:'Bob'};
-  const entries = {p1:{a:'X'}, p2:{a:'X', b:'Y'}};
-  const locks   = {p1:{a:true}, p2:{a:true, b:true}};
-  const stats   = {p1:{a:{w:1,l:1}}, p2:{a:{w:2,l:2}}};  // both 50%
-  const rows = leaderboard(people, entries, stats, locks);
-  assert.deepEqual(rows.map(r=>r.name), ['Bob','Ann']);
-  assert.equal(rows[0].built, 2);
-});
-
-test('players with no games rank below a genuine 0%', () => {
-  const people = {p1:'Ann', p2:'Bob'};
-  const stats  = {p2:{a:{w:0,l:4}}};                     // Ann unranked, Bob 0%
-  const rows = leaderboard(people, {}, stats, {});
-  assert.deepEqual(rows.map(r=>r.name), ['Bob','Ann']);
-  assert.equal(rows[0].pct, 0);
-  assert.equal(rows[1].pct, null);
-});
-
-test('leaderboard breaks a full tie alphabetically', () => {
+test('leaderboard breaks a tie alphabetically', () => {
   const people = {p1:'Zoe', p2:'Ann'};
   const rows = leaderboard(people, {}, {}, {});
   assert.deepEqual(rows.map(r=>r.name), ['Ann','Zoe']);
@@ -109,6 +91,77 @@ test('leaderboard reports the 32-slot total and win rate', () => {
 
 test('leaderboard on no people is empty', () => {
   assert.deepEqual(leaderboard({}), []);
+});
+
+// ---- winRateBoard: one row per player *per deck* -------------------------------
+
+const PEOPLE = {p1:'Ann', p2:'Bob'};
+
+test('winRateBoard emits a row per player per locked, named deck', () => {
+  const entries = {p1:{w:'Ann White', u:'Ann Blue'}, p2:{w:'Bob White'}};
+  const locks   = {p1:{w:true, u:true}, p2:{w:true}};
+  const rows = winRateBoard(PEOPLE, entries, {}, locks);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map(r=>r.commander).sort(), ['Ann Blue','Ann White','Bob White']);
+});
+
+test('winRateBoard includes only locked rows that name a commander', () => {
+  const entries = {p1:{w:'Locked', u:'Unlocked', b:'   '}};
+  const locks   = {p1:{w:true, b:true, r:true}};   // b is whitespace-only, r is empty
+  const rows = winRateBoard(PEOPLE, entries, {}, locks);
+  assert.deepEqual(rows.map(r=>r.commander), ['Locked']);
+});
+
+test('winRateBoard ranks by win rate, desc', () => {
+  const entries = {p1:{w:'Low'}, p2:{u:'High'}};
+  const locks   = {p1:{w:true}, p2:{u:true}};
+  const stats   = {p1:{w:{w:1,l:3}}, p2:{u:{w:3,l:1}}};   // 25% vs 75%
+  const rows = winRateBoard(PEOPLE, entries, stats, locks);
+  assert.deepEqual(rows.map(r=>r.commander), ['High','Low']);
+  assert.equal(rows[0].pct, 75);
+});
+
+test('winRateBoard breaks a rate tie on games played', () => {
+  const entries = {p1:{w:'Proven', u:'Lucky'}};
+  const locks   = {p1:{w:true, u:true}};
+  const stats   = {p1:{w:{w:5,l:0}, u:{w:1,l:0}}};        // both 100%
+  const rows = winRateBoard(PEOPLE, entries, stats, locks);
+  assert.deepEqual(rows.map(r=>r.commander), ['Proven','Lucky']);
+});
+
+test('winRateBoard parks unplayed decks below a genuine 0%', () => {
+  const entries = {p1:{w:'Never played'}, p2:{u:'Winless'}};
+  const locks   = {p1:{w:true}, p2:{u:true}};
+  const stats   = {p2:{u:{w:0,l:4}}};
+  const rows = winRateBoard(PEOPLE, entries, stats, locks);
+  assert.deepEqual(rows.map(r=>r.commander), ['Winless','Never played']);
+  assert.equal(rows[0].pct, 0);
+  assert.equal(rows[1].pct, null);
+});
+
+test('winRateBoard carries the identity name and colours for the pips', () => {
+  const rows = winRateBoard({p1:'Ann'}, {p1:{gwu:'Atraxa'}}, {}, {p1:{gwu:true}});
+  assert.equal(rows[0].identity, 'Bant');
+  assert.deepEqual(rows[0].colors, ['G','W','U']);
+  assert.equal(rows[0].player, 'Ann');
+  assert.equal(rows[0].playerId, 'p1');
+  assert.equal(rows[0].rowId, 'gwu');
+});
+
+test('winRateBoard clamps junk W/L like the sheet does', () => {
+  const rows = winRateBoard({p1:'Ann'}, {p1:{w:'X'}}, {p1:{w:{w:-2,l:'3'}}}, {p1:{w:true}});
+  assert.equal(rows[0].w, 0);
+  assert.equal(rows[0].l, 3);
+  assert.equal(rows[0].pct, 0);
+});
+
+test('winRateBoard skips row ids that are not real identities', () => {
+  const rows = winRateBoard({p1:'Ann'}, {p1:{nonsense:'Ghost'}}, {}, {p1:{nonsense:true}});
+  assert.deepEqual(rows, []);
+});
+
+test('winRateBoard on no people is empty', () => {
+  assert.deepEqual(winRateBoard({}), []);
 });
 
 test('pips renders one mana symbol per colour', () => {

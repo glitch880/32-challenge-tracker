@@ -49,12 +49,36 @@ const winPct = (w,l) => (w+l) ? Math.round(100*w/(w+l)) : null;   // null = no g
 // pct===null means "no games yet" — unranked, not 0%. -1 parks those below a genuine 0%.
 const rank = r => r.pct===null ? -1 : r.pct;
 
-// Win rate leads the board; decks built breaks rate ties, name breaks the rest.
+const IDENTITY_BY_ID = Object.fromEntries(IDENTITIES.map(i=>[i.id,i]));
+
+// Board 1 — one row per player, ranked by progress through the 32.
 function leaderboard(people, entries={}, stats={}, locks={}, total=IDENTITIES.length){
   return Object.entries(people).map(([id,name])=>{
     const t = tally(entries[id], stats[id], locks[id]);
     return {id, name, ...t, pct: winPct(t.w,t.l), total};
-  }).sort((a,b)=> rank(b)-rank(a) || b.built-a.built || a.name.localeCompare(b.name));
+  }).sort((a,b)=> b.built-a.built || a.name.localeCompare(b.name));
 }
 
-if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,leaderboard};
+// Board 2 — one row per player *per deck*, ranked by that deck's win rate.
+// Only built decks compete: same rule as tally() — the row must be locked AND named.
+// More games breaks a rate tie, so 5–0 outranks 1–0; unplayed decks sit at the bottom.
+function winRateBoard(people, entries={}, stats={}, locks={}){
+  const rows = [];
+  Object.entries(people).forEach(([id,name])=>{
+    const ent = entries[id] || {}, st = stats[id] || {}, lk = locks[id] || {};
+    Object.keys(lk).forEach(rowId=>{
+      const commander = (ent[rowId]||'').trim();
+      if(!lk[rowId] || !commander) return;
+      const idn = IDENTITY_BY_ID[rowId];
+      if(!idn) return;                       // unknown row id — stale data, skip it
+      const w = clampInt((st[rowId]||{}).w), l = clampInt((st[rowId]||{}).l);
+      rows.push({playerId:id, player:name, rowId, commander,
+                 identity:idn.name, colors:idn.c, w, l, pct:winPct(w,l)});
+    });
+  });
+  return rows.sort((a,b)=>
+    rank(b)-rank(a) || (b.w+b.l)-(a.w+a.l) ||
+    a.player.localeCompare(b.player) || a.commander.localeCompare(b.commander));
+}
+
+if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,leaderboard,winRateBoard};
