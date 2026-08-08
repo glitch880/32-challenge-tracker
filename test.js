@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert');
-const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
+const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,safeUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
 
 test('clampInt floors to a non-negative integer', () => {
   assert.equal(clampInt(-3), 0);
@@ -28,6 +28,46 @@ test('commanderQuery filters by EXACT colour identity, not a subset', () => {
   assert.ok(!q.includes('id<='), 'must not use subset matching — that lets mono/2-colour cards into a 3-colour row');
   assert.ok(q.includes('is:commander'));
   assert.ok(q.includes('atraxa'));
+});
+
+// ---- safeUrl: the gate between a shared text field and an href ------------------
+
+test('safeUrl passes http and https through', () => {
+  assert.equal(safeUrl('https://moxfield.com/decks/abc'), 'https://moxfield.com/decks/abc');
+  assert.equal(safeUrl('http://deckstats.net/decks/1'), 'http://deckstats.net/decks/1');
+});
+
+test('safeUrl prefixes a bare domain — what people actually paste', () => {
+  assert.equal(safeUrl('moxfield.com/decks/abc'), 'https://moxfield.com/decks/abc');
+  assert.equal(safeUrl('  archidekt.com/folders/26610  '), 'https://archidekt.com/folders/26610');
+});
+
+test('safeUrl rejects any scheme that is not http(s)', () => {
+  // The whole point: a javascript: URL in an href executes on click.
+  assert.equal(safeUrl('javascript:alert(1)'), null);
+  assert.equal(safeUrl('JaVaScRiPt:alert(1)'), null);       // scheme match is case-insensitive
+  assert.equal(safeUrl('  javascript:alert(1)'), null);     // and survives padding
+  assert.equal(safeUrl('data:text/html,<script>x</script>'), null);
+  assert.equal(safeUrl('vbscript:msgbox(1)'), null);
+  assert.equal(safeUrl('file:///etc/passwd'), null);
+});
+
+test('safeUrl does not rewrite a bad scheme into a good one', () => {
+  // Prefixing unconditionally would turn this into https://javascript:alert(1). The scheme
+  // test must run first, and the result must still be null either way.
+  assert.equal(safeUrl('javascript:alert(1)'), null);
+  assert.equal(safeUrl('https://javascript:alert(1)'), null);   // unparseable port -> throws -> null
+});
+
+test('safeUrl treats empty and junk as no link', () => {
+  for(const v of ['', '   ', null, undefined, 'http://', 'not a url at all']){
+    assert.equal(safeUrl(v), null, `${JSON.stringify(v)} should not produce a link`);
+  }
+});
+
+test('safeUrl is idempotent — storing its own output changes nothing', () => {
+  const once = safeUrl('moxfield.com/decks/abc');
+  assert.equal(safeUrl(once), once);
 });
 
 test('tally counts a deck only when the row is locked AND has a commander', () => {

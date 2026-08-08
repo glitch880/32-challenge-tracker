@@ -58,6 +58,22 @@ function imageUrl(pin, name, version='art_crop'){
     : `${base}named?format=image&version=${version}&fuzzy=${encodeURIComponent(name)}`;
 }
 
+// A decklist URL is player-supplied on a sheet everyone shares, so it is checked before it
+// can ever reach an href: a javascript: URL in an href runs on click. Anything that isn't
+// http/https comes back null, and null renders as no link at all rather than a dead one.
+// Returns the parsed href, so what gets stored is already normalised.
+function safeUrl(u){
+  const s = String(u ?? '').trim();
+  if(!s) return null;
+  // A bare "moxfield.com/decks/x" is what people actually paste. Prefix only when there is
+  // no scheme at all, so "javascript:…" is never rewritten into something that parses.
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(s) ? s : 'https://' + s;
+  try{
+    const {protocol, href} = new URL(withScheme);
+    return (protocol === 'http:' || protocol === 'https:') ? href : null;
+  }catch{ return null; }
+}
+
 function pips(colors){
   return '<div class="pips">' +
     colors.map(k=>`<i class="ms ms-${k.toLowerCase()} ms-cost"></i>`).join('') +
@@ -151,4 +167,4 @@ function winRateBoard(people, entries={}, stats={}, locks={}){
     a.player.localeCompare(b.player) || a.commander.localeCompare(b.commander));
 }
 
-if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups};
+if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,safeUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups};

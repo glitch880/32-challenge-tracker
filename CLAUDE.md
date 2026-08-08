@@ -40,7 +40,7 @@ Views: `current === null` renders the summary (two boards, `BOARDS`); otherwise 
 
 ## Firebase data model
 
-Root ref is `challenge`. Six parallel sibling nodes — `people` keyed by pushId, the rest by `pushId → rowId`:
+Root ref is `challenge`. Seven parallel sibling nodes — `people` keyed by pushId, the rest by `pushId → rowId`:
 
 ```
 challenge/people/<pid>          = "Ann"           (name)
@@ -49,6 +49,7 @@ challenge/stats/<pid>/<rowId>   = {w, l}
 challenge/tags/<pid>/<rowId>    = "poison…"       (free-text description)
 challenge/locks/<pid>/<rowId>   = true            (absent = unlocked)
 challenge/prints/<pid>/<rowId>  = {id, name, set} (pinned printing — art only)
+challenge/links/<pid>/<rowId>   = "https://…"     (decklist URL, normalised by safeUrl)
 ```
 
 `rowId` is an identity id from `IDENTITIES` (`'gwu'`, `'c'`, `'wubrg'`). Per-person nodes are separate so two people editing at once never clobber each other. **A new per-deck field means another sibling node — and it must also be deleted in `removePerson()`, which removes each node by hand** ([index.html](index.html:724)).
@@ -62,6 +63,6 @@ Auth is one shared account (`CONFIG.sharedEmail`) whose password is the group pa
 - **The Oracle name is authoritative.** `entries` stores the Oracle name and nothing else; pinning a printing changes the *art only*, so `tally()` and `winRateBoard()` keep operating on one stable string with nothing to migrate. Writing a reskin's printed name into `entries` would break both boards silently. A reskin's own name comes from `printInfo()` and is display-only — it appears on the picker tile and in the slot tooltip, never in the caption and never in `entries`. `printInfo()` reads `flavor_name` before `printed_name`, because Scryfall uses them for different reskin shapes and reading one misses half of them.
 - **Scryfall query syntax lives in `logic.js`, not at the call sites** — `commanderQuery()` (autocomplete) and `printsQuery()` (exact-name match; the caller adds `&unique=prints`) build the `q=` payload, and `imageUrl()` builds card-image URLs, choosing pinned id vs. fuzzy name. The two `/cards/search` endpoint URLs are assembled inline where they're fetched ([index.html](index.html:255), [:523](index.html:523)); the query *syntax* is what must not be re-derived there. The worked example: `commanderQuery` uses `id=` (exact), never `id<=`, because subset matching lets mono cards into a 3-color row.
 - **Re-render guards are load-bearing.** `root.on('value')` fires on every remote edit, so both per-person views re-render constantly: they rebuild DOM only when the person changed — `builtFor` for `renderSheet()`, `artFor` for `renderArt()` ([index.html](index.html:574)) — and `renderArt()` assigns `img.src` only when the URL actually changed ([index.html](index.html:628)) — without that, each snapshot re-requests all 32 images. Field values also skip `document.activeElement`, so a live update can't yank the cursor out of what someone is typing.
-- **Player-supplied text goes in via `textContent`, never `innerHTML`.** Commander names and player names are untrusted input.
+- **Player-supplied text goes in via `textContent`, never `innerHTML`.** Commander names, player names, and descriptions are untrusted input on a sheet everyone shares. A URL is the sharper case: `safeUrl()` is the only thing allowed to produce an `href`, and it returns `null` for anything that isn't `http:`/`https:` — a `javascript:` URL in an `href` executes on click. It runs at save *and* at render, so a value stored before the check existed can't become clickable later.
 - **The mobile `@media (max-width:640px)` block must stay last in `<style>`.** Media queries add no specificity; an equally-specific rule later in the file silently wins (that bug shipped once).
 - `// ponytail:` comments mark deliberate simplifications — a known ceiling, not an oversight.
