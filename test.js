@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert');
-const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
+const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
 
 test('clampInt floors to a non-negative integer', () => {
   assert.equal(clampInt(-3), 0);
@@ -127,6 +127,75 @@ test('leaderboard reports the 32-slot total and win rate', () => {
 
 test('leaderboard on no people is empty', () => {
   assert.deepEqual(leaderboard({}), []);
+});
+
+// ---- choosing a printing -------------------------------------------------------
+
+test('printsQuery asks for one exact name', () => {
+  const q = printsQuery('Trostani, Selesnya\'s Voice');
+  assert.equal(q, '!"Trostani, Selesnya\'s Voice"');
+  assert.equal(printsQuery('  Atraxa  '), '!"Atraxa"');
+});
+
+test('printsQuery strips quotes that would break the search', () => {
+  assert.equal(printsQuery('Ach! Hans, "Run!"'), '!"Ach! Hans, Run!"');
+});
+
+test('printInfo prefers flavor_name — the two-names-on-one-card treatment', () => {
+  const p = printInfo({id:'x', name:'Zilortha, Strength Incarnate',
+                       flavor_name:'Godzilla, King of the Monsters',
+                       set_name:'Ikoria', collector_number:'275'});
+  assert.equal(p.name, 'Godzilla, King of the Monsters');
+});
+
+test('printInfo falls back to printed_name — the reflavored-print case', () => {
+  // How Scryfall models the Miku reskins: no flavor_name, the reskin sits in printed_name.
+  const p = printInfo({id:'y', name:'Trostani, Selesnya\'s Voice',
+                       printed_name:'Miku, Song of the People',
+                       set_name:'Secret Lair Commander Deck: Hatsune Miku', collector_number:'3'});
+  assert.equal(p.name, 'Miku, Song of the People');
+  assert.equal(p.set, 'Secret Lair Commander Deck: Hatsune Miku #3');
+});
+
+test('printInfo uses the plain name when a printing is not reskinned', () => {
+  const p = printInfo({id:'z', name:'Atraxa, Praetors\' Voice',
+                       set_name:'Commander 2016', collector_number:'28'});
+  assert.equal(p.name, 'Atraxa, Praetors\' Voice');
+});
+
+test('printInfo separates same-named printings by set and number', () => {
+  // The plain alternate-art case: identical names, so the set label is the only handle.
+  const a = printInfo({id:'a1', name:'Atraxa, Praetors\' Voice', set_name:'Commander 2016', collector_number:'28'});
+  const b = printInfo({id:'b2', name:'Atraxa, Praetors\' Voice', set_name:'Double Masters', collector_number:'146'});
+  assert.equal(a.name, b.name, 'fixture must share a name — that is the point');
+  assert.notEqual(a.id, b.id);
+  assert.notEqual(a.set, b.set);
+});
+
+test('printInfo survives a card object missing fields', () => {
+  assert.deepEqual(printInfo(), {id:'', name:'', set:''});
+  assert.deepEqual(printInfo({name:'X'}), {id:'', name:'X', set:''});
+});
+
+test('imageUrl addresses a pinned printing by id', () => {
+  const u = imageUrl({id:'abc-123'}, 'ignored', 'art_crop');
+  assert.match(u, /\/cards\/abc-123\?/);
+  assert.match(u, /version=art_crop/);
+  assert.ok(!u.includes('fuzzy='), 'a pinned printing must not fall back to name matching');
+});
+
+test('imageUrl falls back to a fuzzy name lookup with no pin', () => {
+  for(const pin of [null, undefined, {}, {id:''}]){
+    const u = imageUrl(pin, 'Atraxa, Praetors\' Voice');
+    assert.match(u, /\/cards\/named\?/);
+    assert.match(u, /fuzzy=Atraxa/);
+  }
+});
+
+test('imageUrl passes the version through and encodes the name', () => {
+  assert.match(imageUrl(null, 'Ach! Hans', 'normal'), /version=normal/);
+  assert.match(imageUrl(null, 'Ach! Hans'), /fuzzy=Ach!?%20Hans|fuzzy=Ach!\+Hans|fuzzy=Ach%21%20Hans/);
+  assert.ok(!imageUrl(null, 'a b').includes(' '), 'spaces must be encoded');
 });
 
 // ---- identityGroups: the six categories the art board lays out -----------------
