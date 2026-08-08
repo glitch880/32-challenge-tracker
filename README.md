@@ -56,3 +56,9 @@ node --test
 - Export the whole thing to a printable sheet like the original image
 - When adding a new person, make them also add a passkey that they need to unlock their page so only those with the passkey can edit. 
 - Support for partner / Background
+- Name edit functionality
+- Bracket level
+- Richer status field
+- Commander Art board
+  -  this is a 32-slot grid pulling the same Scryfall images your hover preview uses.
+- Link to decklist
