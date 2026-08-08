@@ -129,7 +129,7 @@
   .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
   .lock:hover{ opacity:1; }
   /* Same affordance as .lock — one small glyph in the row. Unset is dim so 32 empty rows
-     don't read as 32 links; .set lifts it to match the lock's weight. */
+     don't read as 32 links; .set lifts it clear of that, above .lock's .65 rather than to it. */
   .deck{ border:none; background:none; cursor:pointer; font-size:13px; line-height:1; padding:0 2px; flex:none; opacity:.35; text-decoration:none; color:inherit; }
   .deck:hover{ opacity:1; }
   /* .open is only ever unhidden when a URL exists, so it is always at "set" weight. */

@@ -379,21 +379,34 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const CLAUDE_MD = fs.readFileSync(path.join(__dirname, 'CLAUDE.md'), 'utf8');
-const mdLinks = () => [...CLAUDE_MD.matchAll(/\]\(([^)\s]+)\)/g)].map(m => m[1]);
+
+// Repo-relative link targets only — both tests below must agree on what counts as a link,
+// so the filtering lives here rather than in one of them. An external URL is excluded
+// because its :9000 is a port, not a line anchor; a bare #section points inside this file.
+// [^)] rather than [^)\s] so a path with a space still gets checked: a target containing a
+// literal ')' comes out truncated and fails the existence test, which beats skipping it.
+// The external test matches the scheme *and its slashes*, not a bare `word:` — "index.html:"
+// is letters-dot-letters-colon, so a general scheme pattern reads it as a URL and waves
+// through the one thing these tests exist to catch.
+const mdLinks = () => [...CLAUDE_MD.matchAll(/\]\(([^)]*)\)/g)]
+  .map(m => m[1].trim())
+  .filter(l => l && !/^(https?:\/\/|mailto:)/i.test(l) && !l.startsWith('#'));
+
+// index.html:272 and index.html#L272 are the same mistake in two spellings.
+const LINE_ANCHOR = /(:|#L?)\d+$/;
 
 // CLAUDE.md is loaded into every session, so a wrong claim in it is wrong everywhere. Line
 // anchors are the way it goes wrong silently: any edit above one shifts it and nothing
 // complains. It drifted three PRs running before this test existed.
 test('CLAUDE.md cites names, not line numbers', () => {
-  const numbered = mdLinks().filter(l => /:\d+$/.test(l));
-  assert.deepEqual(numbered, [],
+  assert.deepEqual(mdLinks().filter(l => LINE_ANCHOR.test(l)), [],
     'name the function or const instead — a line anchor goes stale on the next edit above it');
 });
 
 test('every file CLAUDE.md links to exists', () => {
   for(const link of mdLinks()){
-    if(/^[a-z]+:/i.test(link) || link.startsWith('#')) continue;   // external URL or in-page
-    assert.ok(fs.existsSync(path.join(__dirname, link)), `CLAUDE.md links to missing ${link}`);
+    const file = link.replace(/#.*$/, '');       // a #section is a position, not a filename
+    assert.ok(fs.existsSync(path.join(__dirname, file)), `CLAUDE.md links to missing ${file}`);
   }
 });
 
