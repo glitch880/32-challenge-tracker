@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert');
-const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
+const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,safeUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
 
 test('clampInt floors to a non-negative integer', () => {
   assert.equal(clampInt(-3), 0);
@@ -28,6 +28,46 @@ test('commanderQuery filters by EXACT colour identity, not a subset', () => {
   assert.ok(!q.includes('id<='), 'must not use subset matching — that lets mono/2-colour cards into a 3-colour row');
   assert.ok(q.includes('is:commander'));
   assert.ok(q.includes('atraxa'));
+});
+
+// ---- safeUrl: the gate between a shared text field and an href ------------------
+
+test('safeUrl passes http and https through', () => {
+  assert.equal(safeUrl('https://moxfield.com/decks/abc'), 'https://moxfield.com/decks/abc');
+  assert.equal(safeUrl('http://deckstats.net/decks/1'), 'http://deckstats.net/decks/1');
+});
+
+test('safeUrl prefixes a bare domain — what people actually paste', () => {
+  assert.equal(safeUrl('moxfield.com/decks/abc'), 'https://moxfield.com/decks/abc');
+  assert.equal(safeUrl('  archidekt.com/folders/26610  '), 'https://archidekt.com/folders/26610');
+});
+
+test('safeUrl rejects any scheme that is not http(s)', () => {
+  // The whole point: a javascript: URL in an href executes on click.
+  assert.equal(safeUrl('javascript:alert(1)'), null);
+  assert.equal(safeUrl('JaVaScRiPt:alert(1)'), null);       // scheme match is case-insensitive
+  assert.equal(safeUrl('  javascript:alert(1)'), null);     // and survives padding
+  assert.equal(safeUrl('data:text/html,<script>x</script>'), null);
+  assert.equal(safeUrl('vbscript:msgbox(1)'), null);
+  assert.equal(safeUrl('file:///etc/passwd'), null);
+});
+
+test('safeUrl does not rewrite a bad scheme into a good one', () => {
+  // Prefixing unconditionally would turn this into https://javascript:alert(1). The scheme
+  // test must run first, and the result must still be null either way.
+  assert.equal(safeUrl('javascript:alert(1)'), null);
+  assert.equal(safeUrl('https://javascript:alert(1)'), null);   // unparseable port -> throws -> null
+});
+
+test('safeUrl treats empty and junk as no link', () => {
+  for(const v of ['', '   ', null, undefined, 'http://', 'not a url at all']){
+    assert.equal(safeUrl(v), null, `${JSON.stringify(v)} should not produce a link`);
+  }
+});
+
+test('safeUrl is idempotent — storing its own output changes nothing', () => {
+  const once = safeUrl('moxfield.com/decks/abc');
+  assert.equal(safeUrl(once), once);
 });
 
 test('tally counts a deck only when the row is locked AND has a commander', () => {
@@ -335,6 +375,40 @@ test('winRateBoard on no people is empty', () => {
 
 const {STAMPED, hashFile, currentStamp} = require('./stamp.js');
 const {CONFIG} = require('./config.js');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const CLAUDE_MD = fs.readFileSync(path.join(__dirname, 'CLAUDE.md'), 'utf8');
+
+// Repo-relative link targets only — both tests below must agree on what counts as a link,
+// so the filtering lives here rather than in one of them. An external URL is excluded
+// because its :9000 is a port, not a line anchor; a bare #section points inside this file.
+// [^)] rather than [^)\s] so a path with a space still gets checked: a target containing a
+// literal ')' comes out truncated and fails the existence test, which beats skipping it.
+// The external test matches the scheme *and its slashes*, not a bare `word:` — "index.html:"
+// is letters-dot-letters-colon, so a general scheme pattern reads it as a URL and waves
+// through the one thing these tests exist to catch.
+const mdLinks = () => [...CLAUDE_MD.matchAll(/\]\(([^)]*)\)/g)]
+  .map(m => m[1].trim())
+  .filter(l => l && !/^(https?:\/\/|mailto:)/i.test(l) && !l.startsWith('#'));
+
+// index.html:272 and index.html#L272 are the same mistake in two spellings.
+const LINE_ANCHOR = /(:|#L?)\d+$/;
+
+// CLAUDE.md is loaded into every session, so a wrong claim in it is wrong everywhere. Line
+// anchors are the way it goes wrong silently: any edit above one shifts it and nothing
+// complains. It drifted three PRs running before this test existed.
+test('CLAUDE.md cites names, not line numbers', () => {
+  assert.deepEqual(mdLinks().filter(l => LINE_ANCHOR.test(l)), [],
+    'name the function or const instead — a line anchor goes stale on the next edit above it');
+});
+
+test('every file CLAUDE.md links to exists', () => {
+  for(const link of mdLinks()){
+    const file = link.replace(/#.*$/, '');       // a #section is a position, not a filename
+    assert.ok(fs.existsSync(path.join(__dirname, file)), `CLAUDE.md links to missing ${file}`);
+  }
+});
 
 for(const file of STAMPED){
   test(`index.html carries the current ${file} hash`, () => {

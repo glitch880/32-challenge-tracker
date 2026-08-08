@@ -128,6 +128,12 @@
   .desc:focus{ border-bottom-color:var(--text); color:var(--text); }
   .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
   .lock:hover{ opacity:1; }
+  /* Same affordance as .lock — one small glyph in the row. Unset is dim so 32 empty rows
+     don't read as 32 links; .set lifts it clear of that, above .lock's .65 rather than to it. */
+  .deck{ border:none; background:none; cursor:pointer; font-size:13px; line-height:1; padding:0 2px; flex:none; opacity:.35; text-decoration:none; color:inherit; }
+  .deck:hover{ opacity:1; }
+  /* .open is only ever unhidden when a URL exists, so it is always at "set" weight. */
+  .deck.set, .deck.open{ opacity:.8; }
   /* A locked row is a built deck — the achievement on this page, so it reads loudest.
      The 8px inset is cancelled by an equal negative margin, so the tint bleeds outward
      while the content box stays put and .desc's 202px indent still lines up. 8 and not
@@ -214,7 +220,7 @@
      Without them a browser can pair a fresh index.html with a cached copy of one of
      these, and the page breaks in ways that don't announce themselves. -->
 <script src="config.js?v=93227651"></script>
-<script src="logic.js?v=16e5e404"></script>
+<script src="logic.js?v=cb664bed"></script>
 
 <script>
 // Deployment settings live in config.js (CONFIG); IDENTITIES and the pure helpers in
@@ -239,6 +245,7 @@ let stats = {};       // pushId -> {rowId: {w,l}}
 let tags = {};        // pushId -> {rowId: text}  (free-text description per deck)
 let locks = {};       // pushId -> {rowId: true}  (locked rows: commander+desc read-only)
 let prints = {};      // pushId -> {rowId: {id,name,set}}  (chosen printing; art only)
+let links = {};       // pushId -> {rowId: url}  (decklist URL per deck)
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
 let artFor = null;    // which pushId the art DOM is built for
@@ -277,7 +284,7 @@ function checkScripts(){
     tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
     leaderboard: typeof leaderboard, winRateBoard: typeof winRateBoard,
     printsQuery: typeof printsQuery, printInfo: typeof printInfo, imageUrl: typeof imageUrl,
-    identityGroups: typeof identityGroups,
+    identityGroups: typeof identityGroups, safeUrl: typeof safeUrl,
   }).filter(([,t])=> t==='undefined').map(([n])=> n);
   if(!missing.length) return;
   $stale.textContent =
@@ -322,6 +329,7 @@ function start(){
     tags = data.tags || {};
     locks = data.locks || {};
     prints = data.prints || {};
+    links = data.links || {};
     const ids = Object.keys(people);
     if(current && !ids.includes(current)) current = null;   // removed person -> back to summary
     renderTabs();
@@ -644,6 +652,17 @@ function renderSheet(){
       lock.className='lock'; lock.type='button';
       lock.onclick=()=>toggleLock(idn.id);
       row.appendChild(lock);
+      // Two elements, one visible at a time: a real <a> to open and a real <button> to
+      // edit. Swapping element types on every snapshot would churn the DOM, and giving one
+      // element both jobs costs a tabindex and a keydown handler to stay keyboard-usable.
+      const open=document.createElement('a');
+      open.className='deck open'; open.textContent='🔗'; open.hidden=true;
+      open.target='_blank'; open.rel='noopener noreferrer';
+      row.appendChild(open);
+      const edit=document.createElement('button');
+      edit.className='deck edit'; edit.type='button'; edit.textContent='🔗';
+      edit.onclick=()=>editLink(idn.id);
+      row.appendChild(edit);
       const inp=document.createElement('input');
       inp.className='entry'; inp.placeholder='commander…'; inp.dataset.row=idn.id;
       inp.setAttribute('list','dl-'+idn.id); inp.autocomplete='off';
@@ -667,6 +686,7 @@ function renderSheet(){
   const scur = stats[current] || {};
   const tcur = tags[current] || {};
   const lcur = locks[current] || {};
+  const lnkcur = links[current] || {};
   $sheet.querySelectorAll('.row').forEach(row=>{
     const id = row.dataset.row;
     const inp = row.querySelector('input.entry');
@@ -683,6 +703,18 @@ function renderSheet(){
     const lock = row.querySelector('.lock');
     lock.textContent = locked ? '🔒' : '🔓';
     lock.title = locked ? 'Unlock' : 'Lock';
+    // A locked row is frozen, so its link stops being editable and becomes the thing you
+    // click to open the deck — same rule the commander and description already follow.
+    // safeUrl() runs here too, not just at save: it is the last gate before an href, and
+    // a value written before this validation existed must not become clickable now.
+    const url = safeUrl(lnkcur[id]);
+    const open = row.querySelector('.deck.open'), edit = row.querySelector('.deck.edit');
+    open.hidden = !(locked && url);
+    edit.hidden = locked;
+    if(url) open.href = url; else open.removeAttribute('href');
+    open.title = url || '';
+    edit.classList.toggle('set', !!url);
+    edit.title = url ? `Edit decklist link — ${url}` : 'Add decklist link';
   });
 }
 
@@ -702,6 +734,20 @@ function toggleLock(rowId){
   const locked = !!(locks[current]||{})[rowId];
   const ref = root.child('locks/'+current+'/'+rowId);
   locked ? ref.remove() : ref.set(true);   // remove on unlock keeps the node clean
+}
+
+// Stores the normalised href rather than the raw text, so "moxfield.com/x" is saved the
+// same way it would be typed with a scheme, and every reader downstream gets one shape.
+// ponytail: prompt()/alert(), same as addPerson(). Ceiling is no inline editing and no
+// validation until you hit OK — swap for an inline field if that starts to grate.
+function editLink(rowId){
+  const cur = (links[current] || {})[rowId] || '';
+  const v = prompt('Decklist URL for this deck (Moxfield, Archidekt, …) — clear it to remove:', cur);
+  if(v === null) return;                                   // cancelled, not emptied
+  if(!v.trim()){ saveField('links', rowId, ''); return; }
+  const url = safeUrl(v);
+  if(!url){ alert('That needs to be an http:// or https:// address.'); return; }
+  saveField('links', rowId, url);
 }
 
 function saveField(node, rowId, val){
@@ -729,6 +775,7 @@ function removePerson(id,name){
   root.child('tags/'+id).remove();
   root.child('locks/'+id).remove();
   root.child('prints/'+id).remove();
+  root.child('links/'+id).remove();
 }
 
 // Card-art hover preview — one shared floating <img>, delegated on the sheet so it also
