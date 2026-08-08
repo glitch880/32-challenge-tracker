@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert');
-const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard} = require('./logic.js');
+const {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups} = require('./logic.js');
 
 test('clampInt floors to a non-negative integer', () => {
   assert.equal(clampInt(-3), 0);
@@ -127,6 +127,42 @@ test('leaderboard reports the 32-slot total and win rate', () => {
 
 test('leaderboard on no people is empty', () => {
   assert.deepEqual(leaderboard({}), []);
+});
+
+// ---- identityGroups: the six categories the art board lays out -----------------
+
+test('identityGroups splits the 32 into the challenge categories', () => {
+  const g = identityGroups();
+  assert.deepEqual(g.map(x=>x.label),
+    ['Colorless','Mono','Two-color','Three-color','Four-color','Five-color']);
+  assert.deepEqual(g.map(x=>x.items.length), [1,5,10,10,5,1]);
+});
+
+test('identityGroups files colorless separately from mono', () => {
+  const g = identityGroups();
+  const by = Object.fromEntries(g.map(x=>[x.label, x.items.map(i=>i.id)]));
+  assert.deepEqual(by.Colorless, ['c']);
+  assert.ok(!by.Mono.includes('c'), 'colorless must not land in mono despite c.length===1');
+  assert.deepEqual(by.Mono.sort(), ['b','g','r','u','w']);
+});
+
+test('identityGroups covers every identity exactly once', () => {
+  const flat = identityGroups().flatMap(x=>x.items.map(i=>i.id));
+  assert.equal(flat.length, IDENTITIES.length);
+  assert.equal(uniq(flat).length, IDENTITIES.length);
+  assert.deepEqual(flat.slice().sort(), IDENTITIES.map(i=>i.id).sort());
+});
+
+test('identityGroups keeps IDENTITIES order within a group', () => {
+  const three = identityGroups().find(x=>x.label==='Three-color').items.map(i=>i.id);
+  const want = IDENTITIES.filter(i=>i.c.length===3).map(i=>i.id);
+  assert.deepEqual(three, want);
+});
+
+test('identityGroups does not mutate the list it is given', () => {
+  const input = IDENTITIES.slice();
+  identityGroups(input);
+  assert.equal(input.length, IDENTITIES.length);
 });
 
 // ---- winRateBoard: one row per player *per deck* -------------------------------

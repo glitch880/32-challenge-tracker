@@ -72,6 +72,31 @@
   .lead .pips{ width:auto; }
   .lead .pips .ms{ font-size:16px; }
   .lead .cmd{ flex:1; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #art{ display:none; }
+  #viewtoggle{ display:none; }
+  .art .group{ font-size:12px; color:var(--faint); text-transform:uppercase; letter-spacing:.06em; margin:18px 0 8px; }
+  .art .group:first-child{ margin-top:0; }
+  .art .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:10px; }
+  .slot{ border:1px solid var(--border-soft); border-radius:8px; overflow:hidden; cursor:pointer; background:var(--track); }
+  .slot:hover{ border-color:var(--text); }
+  /* 626x457 is Scryfall's art_crop ratio — reserving it stops the grid reflowing as art streams in. */
+  .slot img{ display:block; width:100%; aspect-ratio:626/457; object-fit:cover; }
+  .slot .cap{ display:flex; align-items:center; gap:6px; padding:6px 8px; font-size:12px; min-width:0; }
+  .slot .cap b{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slot .cap .idn{ color:var(--faint); font-size:10px; margin-left:auto; flex:none; }
+  .slot .pips{ width:auto; flex:none; }
+  .slot .pips .ms{ font-size:13px; }
+  /* No art to show — either the slot is empty, or Scryfall didn't resolve the name
+     (.noart, set by the image's onerror). Either way the pips stand in for the picture,
+     driven by classes alone so no inline display juggling is needed. */
+  .slot .ph{ display:none; align-items:center; justify-content:center; aspect-ratio:626/457; opacity:.45; }
+  .slot.empty .ph, .slot.noart .ph{ display:flex; }
+  .slot.empty img, .slot.noart img{ display:none; }
+  .slot .ph .ms{ font-size:22px; }
+  .slot.built{ background:var(--done); border-color:var(--accent); }
+  /* Named but not locked — the deck exists on paper, not on the table yet. */
+  .slot.wip img{ filter:saturate(.25); opacity:.7; }
+  .slot.wip .cap b{ font-weight:400; color:var(--muted); }
   /* ponytail: 16 = 32 identities / 2 cols; the "32 Challenge" count is fixed by definition */
   .sheet{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(16,auto); grid-auto-flow:column; gap:6px 28px; }
   .row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; }
@@ -128,6 +153,7 @@
     .lead .who{ flex:1 0 100%; width:auto; }
     .lead .n, .lead .wr{ width:auto; }
     .lead .cmd{ flex:1 1 100%; }      /* commander gets its own line, like the sheet's entry field */
+    .art .grid{ grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:8px; }
   }
 </style>
 </head>
@@ -143,7 +169,9 @@
   <div id="tabs" class="tabs"></div>
   <div id="status" class="status">Connecting…</div>
   <div id="stale" class="stale"></div>
+  <div id="viewtoggle"></div>
   <div id="summary"></div>
+  <div id="art" class="art"></div>
   <div id="sheet" class="sheet"></div>
   <div id="danger"></div>
 </div>
@@ -159,7 +187,7 @@
      Without them a browser can pair a fresh index.html with a cached copy of one of
      these, and the page breaks in ways that don't announce themselves. -->
 <script src="config.js?v=93227651"></script>
-<script src="logic.js?v=a09b8acb"></script>
+<script src="logic.js?v=3b7f4046"></script>
 
 <script>
 // Deployment settings live in config.js (CONFIG); IDENTITIES and the pure helpers in
@@ -167,6 +195,8 @@
 
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
+const $art = document.getElementById('art');
+const $viewToggle = document.getElementById('viewtoggle');
 const $summary = document.getElementById('summary');
 const $danger = document.getElementById('danger');
 const $status = document.getElementById('status');
@@ -183,6 +213,8 @@ let tags = {};        // pushId -> {rowId: text}  (free-text description per dec
 let locks = {};       // pushId -> {rowId: true}  (locked rows: commander+desc read-only)
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
+let artFor = null;    // which pushId the art DOM is built for
+let sheetView = 'sheet';   // 'sheet' | 'art' — only meaningful when current !== null
 const saveTimers = {};
 const acTimers = {};
 
@@ -288,15 +320,38 @@ function renderTabs(){
   $tabs.appendChild(add);
 }
 
-// current === null -> summary/leaderboard; otherwise that person's sheet.
+// current === null -> summary/leaderboard; otherwise that person's sheet or art board.
+const VIEWS = [['sheet','Sheet'], ['art','Art']];
+
 function renderView(){
   const onSummary = !current;
-  // Explicit 'block' — '' would fall back to the stylesheet, and #summary defaults to none.
-  $summary.style.display = onSummary ? 'block' : 'none';
-  $sheet.style.display   = onSummary ? 'none' : '';   // '' restores the stylesheet's grid
-  $danger.style.display  = onSummary ? 'none' : 'block';
-  onSummary ? renderSummary() : renderSheet();
-  if(!onSummary) renderDanger();
+  const onArt = !onSummary && sheetView==='art';
+  // Explicit 'block' — '' would fall back to the stylesheet, and these default to none.
+  $summary.style.display    = onSummary ? 'block' : 'none';
+  $viewToggle.style.display = onSummary ? 'none'  : 'block';
+  $art.style.display        = onArt     ? 'block' : 'none';
+  // '' restores the stylesheet's grid; anything else here breaks the two-column sheet.
+  $sheet.style.display      = (onSummary || onArt) ? 'none' : '';
+  $danger.style.display     = onSummary ? 'none'  : 'block';
+  if(onSummary){ renderSummary(); return; }
+  renderViewToggle();
+  onArt ? renderArt() : renderSheet();
+  renderDanger();
+}
+
+function renderViewToggle(){
+  $viewToggle.innerHTML='';
+  const seg=document.createElement('div');
+  seg.className='segmented';
+  VIEWS.forEach(([key,label])=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='seg'+(sheetView===key?' active':'');
+    b.textContent=label;
+    b.onclick=()=>{ sheetView=key; renderView(); };
+    seg.appendChild(b);
+  });
+  $viewToggle.appendChild(seg);
 }
 
 // Removal lives at the foot of the person's own sheet — you have to be on their page and
@@ -378,6 +433,76 @@ function renderWinRateBoard(list){
     el.title = r.score===null
       ? `${r.identity} · ${r.player} · no games yet`
       : `${r.identity} · ${r.player} · rank score ${(100*r.score).toFixed(1)} (win rate adjusted for ${r.w+r.l} game${r.w+r.l===1?'':'s'})`;
+  });
+}
+
+const ART_URL = name =>
+  'https://api.scryfall.com/cards/named?format=image&version=art_crop&fuzzy='+encodeURIComponent(name);
+
+// Jump from a slot to its row on the sheet — the two views should link, not just coexist.
+function openRow(rowId){
+  sheetView='sheet';
+  renderView();
+  const row = $sheet.querySelector(`.row[data-row="${rowId}"]`);
+  if(!row) return;
+  row.scrollIntoView({block:'center', behavior:'smooth'});
+  row.querySelector('input.entry').focus();
+}
+
+// The same 32 identities as the sheet, drawn as art. Built = locked AND named, the rule
+// tally() uses for the deck count; named-but-unlocked is a deck on paper, not on the table.
+function renderArt(){
+  // Build the slots only when switching person. renderView() runs on every Firebase
+  // snapshot, and rebuilding 32 <img> elements each time would thrash the DOM and
+  // re-trigger image loads — same reasoning as renderSheet's builtFor guard.
+  if(artFor !== current){
+    $art.innerHTML='';
+    identityGroups().forEach(g=>{
+      const h=document.createElement('div');
+      h.className='group';
+      h.textContent=`${g.label} · ${g.items.length}`;
+      $art.appendChild(h);
+      const grid=document.createElement('div');
+      grid.className='grid';
+      g.items.forEach(idn=>{
+        const slot=document.createElement('div');
+        slot.className='slot'; slot.dataset.row=idn.id;
+        slot.innerHTML =
+          `<div class="ph">${pips(idn.c)}</div>`+
+          `<img alt="" loading="lazy">`+
+          `<div class="cap">${pips(idn.c)}<b></b><span class="idn"></span></div>`;
+        slot.querySelector('.cap .idn').textContent = idn.name;
+        // A name that doesn't resolve on Scryfall falls back to the pips rather than
+        // leaving a broken-image icon in the grid.
+        slot.querySelector('img').onerror = ()=> slot.classList.add('noart');
+        slot.onclick = ()=> openRow(idn.id);
+        grid.appendChild(slot);
+      });
+      $art.appendChild(grid);
+    });
+    artFor = current;
+  }
+
+  const ent = entries[current] || {};
+  const lcur = locks[current] || {};
+  $art.querySelectorAll('.slot').forEach(slot=>{
+    const name = (ent[slot.dataset.row]||'').trim();
+    const built = !!lcur[slot.dataset.row] && !!name;
+    slot.classList.toggle('empty', !name);
+    slot.classList.toggle('built', built);
+    slot.classList.toggle('wip', !!name && !built);
+    // Player-supplied text: textContent and the src property, never innerHTML.
+    slot.querySelector('.cap b').textContent = name;
+    slot.dataset.commander = name;               // the hover preview reads this
+    const img = slot.querySelector('img');
+    const want = name ? ART_URL(name) : '';
+    // Assign src only when it actually changed. Without this a live snapshot would
+    // re-request every image on the board.
+    if(img.dataset.want !== want){
+      img.dataset.want = want;
+      slot.classList.remove('noart');
+      if(want) img.src = want; else img.removeAttribute('src');
+    }
   });
 }
 
@@ -492,20 +617,29 @@ function positionPreview(e){
   if(y < pad) y=pad;
   $preview.style.left=x+'px'; $preview.style.top=y+'px';
 }
-$sheet.addEventListener('mouseover', e=>{
-  const inp=e.target.closest('input.entry'); if(!inp || !inp.value.trim()) return;
-  positionPreview(e);
-  clearTimeout(hoverTimer);
-  hoverTimer=setTimeout(()=>{
-    $previewImg.src='https://api.scryfall.com/cards/named?format=image&version=normal&fuzzy='+encodeURIComponent(inp.value.trim());
-    $preview.style.display='block';
-  },200);
-});
-$sheet.addEventListener('mousemove', e=>{ if($preview.style.display==='block') positionPreview(e); });
-$sheet.addEventListener('mouseout', e=>{
-  if(!e.target.closest('input.entry')) return;
-  clearTimeout(hoverTimer); $preview.style.display='none';
-});
+// Both views preview the same card, so they share one floating <img>, one timer and one
+// positioner. Delegated on the container so slots and rows built later are still caught.
+// On the art board this is the point: art_crop deliberately omits the rest of the card.
+function bindPreview(container, sel, nameOf){
+  container.addEventListener('mouseover', e=>{
+    const el=e.target.closest(sel); if(!el) return;
+    const name=(nameOf(el)||'').trim(); if(!name) return;
+    positionPreview(e);
+    clearTimeout(hoverTimer);
+    hoverTimer=setTimeout(()=>{
+      $previewImg.src='https://api.scryfall.com/cards/named?format=image&version=normal&fuzzy='+encodeURIComponent(name);
+      $preview.style.display='block';
+    },200);
+  });
+  container.addEventListener('mousemove', e=>{ if($preview.style.display==='block') positionPreview(e); });
+  // Keyed off the element, not the name — an emptied field must still dismiss the preview.
+  container.addEventListener('mouseout', e=>{
+    if(!e.target.closest(sel)) return;
+    clearTimeout(hoverTimer); $preview.style.display='none';
+  });
+}
+bindPreview($sheet, 'input.entry', el=> el.value);
+bindPreview($art,   '.slot',       el=> el.dataset.commander);
 
 init();
 </script>
