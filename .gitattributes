@@ -1,0 +1,5 @@
+# stamp.js hashes the bytes on disk; CI hashes them on Linux. Without this, a Windows
+# clone (core.autocrlf=true) gets CRLF in the working tree and every stamp disagrees with
+# the committed one — and re-stamping to "fix" it ships a hash Linux can never match.
+# Pinning LF everywhere keeps one file = one hash on every machine.
+* text=auto eol=lf
