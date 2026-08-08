@@ -1,6 +1,6 @@
 # 32 Deck Commander Challenge Tracker
 
-A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). It's backed by Firebase Realtime Database, so everyone with the link edits the same sheet in real time.
+A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). 
 
 **Live site:** https://glitch880.github.io/32-challenge-tracker/
 
