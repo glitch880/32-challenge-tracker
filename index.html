@@ -16,6 +16,7 @@
     --accent:#1d1d1f; --on-accent:#fff;
     --chip:#f5f5f7; --chip-text:#333;
     --border:#d8d8dc; --border-soft:#cfcfd4; --track:#f0f0f2;
+    --done:#f7f3e8;             /* built-deck row tint — warm, to sit with the cream panel */
     --warn:#8a6d3b; --error:#d3413c;
     --bg1:#f6f2ea; --bg2:#eceff3; --glow:rgba(255,255,255,.85);
     --ink:0,0,0;                /* texture/shadow ink, per scheme */
@@ -27,6 +28,7 @@
       --accent:#e8e8ea; --on-accent:#1d1d1f;
       --chip:#2c2f35; --chip-text:#d5d6da;
       --border:#3a3d44; --border-soft:#33363c; --track:#2c2f35;
+      --done:#2b2e34;           /* lifted off the panel rather than warmed */
       --warn:#c9a86a; --error:#ff6b66;
       --bg1:#16171a; --bg2:#1f2126; --glow:rgba(255,255,255,.05);
       --ink:255,255,255;
@@ -77,7 +79,19 @@
   .desc:focus{ border-bottom-color:var(--text); color:var(--text); }
   .lock{ border:none; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; flex:none; opacity:.65; }
   .lock:hover{ opacity:1; }
-  .row.locked input.entry, .row.locked .desc{ color:var(--dim); }
+  /* A locked row is a built deck — the achievement on this page, so it reads loudest.
+     The 8px inset is cancelled by an equal negative margin, so the tint bleeds outward
+     while the content box stays put and .desc's 202px indent still lines up. 8 and not
+     more: the grid's 28px column gap has to keep two tinted rows visibly apart. */
+  .row.locked{
+    background:var(--done); border-radius:6px;
+    border-left:3px solid var(--accent);
+    padding:4px 8px 4px 5px; margin:0 -8px;
+  }
+  .row.locked input.entry{ color:var(--text); font-weight:600; }
+  .row.locked .lock{ opacity:1; }
+  /* Read-only, so stop drawing the editable-field underlines. */
+  .row.locked input.entry, .row.locked .desc{ border-bottom-color:transparent; }
   @media (min-width:1200px){ .desc{ flex:1 1 0; margin-left:0; min-width:0; } .wl{ order:1; } }
   .pips{ display:flex; gap:3px; width:132px; flex:none; }
   .pips .ms{ font-size:20px; }
@@ -104,6 +118,9 @@
     h1{ font-size:24px; }
     .sheet{ grid-template-columns:1fr; grid-template-rows:none; grid-auto-flow:row; }
     .row{ padding:10px 0; border-bottom:1px solid var(--border-soft); }
+    /* .row.locked outranks the .row above, so its 4px vertical padding would win here
+       without this — the specificity trap the comment above warns about, in reverse. */
+    .row.locked{ padding:10px 8px 10px 5px; }
     .pips{ width:auto; }              /* don't reserve 5-symbol width on a mono row */
     input.entry{ flex:1 1 100%; }     /* commander gets its own full-width line */
     .desc{ margin-left:0; }
@@ -137,34 +154,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-<!-- Pure logic, shared with test.js (run: node --test).
-     ?v= is a content hash written by stamp.js — do not edit it by hand. Without it a
-     browser can pair a fresh index.html with a cached logic.js and the boards die. -->
+<!-- Local scripts, both shared with test.js (run: node --test).
+     ?v= on each is a content hash written by stamp.js — do not edit those by hand.
+     Without them a browser can pair a fresh index.html with a cached copy of one of
+     these, and the page breaks in ways that don't announce themselves. -->
+<script src="config.js?v=93227651"></script>
 <script src="logic.js?v=a09b8acb"></script>
 
 <script>
-/* ============================================================
-   1) PASTE YOUR FIREBASE CONFIG HERE (see the setup steps).
-   Only databaseURL + apiKey + projectId are strictly needed
-   for Realtime Database, but paste the whole object.
-   ============================================================ */
-const firebaseConfig = {
-  apiKey: "AIzaSyBwXwdZso93ls8rc5VNUwgTXQhdiEZKSKs",
-  authDomain: "commander-32.firebaseapp.com",
-  databaseURL: "https://commander-32-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "commander-32",
-  storageBucket: "commander-32.firebasestorage.app",
-  messagingSenderId: "861515031209",
-  appId: "1:861515031209:web:f4beedd0aed9d745033fb8",
-  measurementId: "G-K7KX5L5ZYF"
-};
-/* ============================================================ */
-
-// IDENTITIES and the pure helpers live in logic.js.
-
-// Non-secret: identifies the shared Firebase account. The passphrase (that account's
-// password) is entered by the user and validated by Firebase Auth — never stored here.
-const SHARED_EMAIL = "pod@32challenge.local";
+// Deployment settings live in config.js (CONFIG); IDENTITIES and the pure helpers in
+// logic.js. Nothing configurable is hardcoded in this file.
 
 const $tabs = document.getElementById('tabs');
 const $sheet = document.getElementById('sheet');
@@ -207,11 +206,12 @@ function suggest(rowId, q, ci){
 let started = false;
 
 // A cached logic.js paired with a fresh index.html used to fail silently — the page came
-// up and a board just rendered nothing. Name every symbol this file needs and say which
-// ones are missing. typeof on an undeclared identifier is safe, and unlike window[...] it
-// also sees logic.js's top-level const bindings.
-function checkLogic(){
+// up and a board just rendered nothing. Name every symbol this file needs from config.js
+// and logic.js, and say which ones are missing. typeof on an undeclared identifier is
+// safe, and unlike window[...] it also sees their top-level const bindings.
+function checkScripts(){
   const missing = Object.entries({
+    CONFIG: typeof CONFIG,
     IDENTITIES: typeof IDENTITIES, clampInt: typeof clampInt, uniq: typeof uniq,
     ciOf: typeof ciOf, pips: typeof pips, commanderQuery: typeof commanderQuery,
     tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
@@ -219,20 +219,20 @@ function checkLogic(){
   }).filter(([,t])=> t==='undefined').map(([n])=> n);
   if(!missing.length) return;
   $stale.textContent =
-    `Your browser loaded an out-of-date logic.js (missing: ${missing.join(', ')}). `+
+    `Your browser loaded an out-of-date or missing script (no: ${missing.join(', ')}). `+
     `Parts of this page won't work. Hard-refresh to fix it — Ctrl/⌘-Shift-R on desktop, `+
     `or reload from the browser menu on mobile.`;
   $stale.style.display = 'block';
 }
 
 function init(){
-  checkLogic();
+  checkScripts();
   try{
-    firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(CONFIG.firebase);
     db = firebase.database();
     root = db.ref('challenge');
   }catch(e){
-    $status.textContent = 'Firebase not configured — paste your config at the top of the file.';
+    $status.textContent = 'Firebase not configured — check firebase settings in config.js.';
     return;
   }
   // Gate the app behind the shared account. Firebase persists the session, so members
@@ -244,7 +244,7 @@ function init(){
   $gate.addEventListener('submit', e=>{
     e.preventDefault();
     $gateMsg.textContent='';
-    firebase.auth().signInWithEmailAndPassword(SHARED_EMAIL, $gatePass.value)
+    firebase.auth().signInWithEmailAndPassword(CONFIG.sharedEmail, $gatePass.value)
       .catch(()=>{ $gateMsg.textContent='wrong passphrase'; });
   });
 }

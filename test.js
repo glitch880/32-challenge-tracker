@@ -228,11 +228,24 @@ test('winRateBoard on no people is empty', () => {
 // Not logic: this catches a stale cache stamp before it ships, which is the failure
 // that blanked the win-rate board on the live site once.
 
-const {hashLogic, currentStamp} = require('./stamp.js');
+const {STAMPED, hashFile, currentStamp} = require('./stamp.js');
+const {CONFIG} = require('./config.js');
 
-test('index.html carries the current logic.js hash', () => {
-  assert.equal(currentStamp(), hashLogic(),
-    'index.html is stale — run `node stamp.js` and commit it (stamp.js explains why)');
+for(const file of STAMPED){
+  test(`index.html carries the current ${file} hash`, () => {
+    assert.equal(currentStamp(file), hashFile(file),
+      `index.html is stale for ${file} — run \`node stamp.js\` and commit it (stamp.js explains why)`);
+  });
+}
+
+test('config.js provides every setting index.html reads', () => {
+  assert.ok(CONFIG.firebase, 'CONFIG.firebase missing');
+  for(const k of ['apiKey','databaseURL','projectId']){
+    assert.equal(typeof CONFIG.firebase[k], 'string', `CONFIG.firebase.${k} must be a string`);
+    assert.ok(CONFIG.firebase[k].length, `CONFIG.firebase.${k} is empty`);
+  }
+  assert.equal(typeof CONFIG.sharedEmail, 'string');
+  assert.match(CONFIG.sharedEmail, /@/, 'sharedEmail must look like an email address');
 });
 
 test('pips renders one mana symbol per colour', () => {
