@@ -1,6 +1,6 @@
 # 32 Deck Commander Challenge Tracker
 
-A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). It's backed by Firebase Realtime Database, so everyone with the link edits the same sheet in real time.
+A shared, live-updating tracker for the Commander **32 Challenge** — one deck per color identity (5 mono + 10 two-color + 10 three-color + 5 four-color + 1 five-color + 1 colorless). 
 
 **Live site:** https://glitch880.github.io/32-challenge-tracker/
 
@@ -26,17 +26,18 @@ A shared, live-updating tracker for the Commander **32 Challenge** — one deck 
 - **Live multi-person sync** — shared instantly across everyone with the link.
 
 ## Run your own
-Want your own copy? It's two static files (`index.html` + `logic.js`, no build step) plus the DB rules (`database.rules.json`):
+Want your own copy? It's three static files (`index.html` + `config.js` + `logic.js`, no build step) plus the DB rules (`database.rules.json`). **`config.js` is the only one you need to edit:**
 1. Create a Firebase project with a **Realtime Database**.
-2. Paste its `firebaseConfig` over the placeholder near the top of `index.html`.
+2. Paste its `firebaseConfig` over `CONFIG.firebase` in `config.js`.
 3. Publish `database.rules.json` in **Realtime Database → Rules** (requires an authenticated user).
-4. Enable **Email/Password** auth and add one shared user: email = `SHARED_EMAIL` (top of `index.html`), password = your chosen passphrase. Share the passphrase out of band — it's never committed.
-5. Host the file anywhere static (e.g. GitHub Pages: **Settings → Pages → Deploy from a branch**, `main` / root).
+4. Enable **Email/Password** auth and add one shared user: email = `CONFIG.sharedEmail` (in `config.js`), password = your chosen passphrase. Share the passphrase out of band — it's never committed.
+5. Run `node stamp.js` so `index.html` picks up your edited `config.js` (see below).
+6. Host the files anywhere static (e.g. GitHub Pages: **Settings → Pages → Deploy from a branch**, `main` / root).
 
-> The Firebase config in `index.html` is public by design (every Firebase web app ships it to the browser). Your data is protected by the rules + the shared passphrase, not by hiding the config.
+> `config.js` is public by design — every Firebase web app ships its config to the browser, so hiding it would buy nothing. A Firebase web config identifies a project; it does not grant access to one. Your data is protected by the rules + the shared passphrase, and the passphrase is never committed.
 
-### Editing `logic.js`
-The script tag loads it as `logic.js?v=<hash>`. That query string is a content hash, and it matters: `index.html` and `logic.js` are separately cached URLs, so without it a browser can pair a fresh `index.html` with a stale `logic.js` and the page dies quietly. Run `node stamp.js` after editing `logic.js` and commit the updated `index.html` — or install the hook once and forget about it:
+### Editing `config.js` or `logic.js`
+The script tags load them as `config.js?v=<hash>` and `logic.js?v=<hash>`. Those query strings are content hashes, and they matter: `index.html` and its scripts are separately cached URLs, so without them a browser can pair a fresh `index.html` with a stale script and the page dies quietly. Run `node stamp.js` after editing either file and commit the updated `index.html` — or install the hook once and forget about it:
 
 ```bash
 git config core.hooksPath .githooks
@@ -45,7 +46,7 @@ git config core.hooksPath .githooks
 `node --test` fails on a stale stamp either way, so a wrong one can't ship.
 
 ## Tests
-The pure logic (deck tallying, win %, both boards' ordering, Scryfall query building, the 32-identity table) lives in `logic.js` and is covered by `test.js`, along with a check that `index.html`'s cache stamp is current. No dependencies — Node's built-in test runner, also run on every push and PR by `.github/workflows/ci.yml`:
+The pure logic (deck tallying, win %, both boards' ordering, Scryfall query building, the 32-identity table) lives in `logic.js` and is covered by `test.js`, along with checks that `config.js` has every setting the page reads and that `index.html`'s cache stamps are current. No dependencies — Node's built-in test runner, also run on every push and PR by `.github/workflows/ci.yml`:
 
 ```bash
 node --test
