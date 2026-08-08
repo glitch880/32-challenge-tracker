@@ -277,6 +277,7 @@ function checkScripts(){
     tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
     leaderboard: typeof leaderboard, winRateBoard: typeof winRateBoard,
     printsQuery: typeof printsQuery, printInfo: typeof printInfo, imageUrl: typeof imageUrl,
+    identityGroups: typeof identityGroups,
   }).filter(([,t])=> t==='undefined').map(([n])=> n);
   if(!missing.length) return;
   $stale.textContent =

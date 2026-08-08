@@ -34,21 +34,24 @@ Three-way split, deliberate:
 
 `config.js` and `logic.js` are loaded *both* as plain `<script>` tags and via `require()` from [test.js](test.js), using the `if (typeof module !== 'undefined') module.exports = …` idiom at the foot of each. Consequences: no ESM syntax in either file, and anything new that `index.html` uses must be added to that `module.exports` list.
 
-`index.html`'s `checkScripts()` names every symbol it expects from the two scripts so a stale-cache load reports which one is missing instead of dying quietly. **Add new exported symbols to that list** ([index.html](index.html:213)).
+`index.html`'s `checkScripts()` names every symbol it expects from the two scripts so a stale-cache load reports which one is missing instead of dying quietly. **Add new exported symbols to that list** ([index.html](index.html:272)) — a symbol that is exported and used but unlisted is invisible to exactly the failure the check exists to catch.
+
+Views: `current === null` renders the summary (two boards, `BOARDS`); otherwise that person's page, which itself toggles between **Sheet** and **Art** (`VIEWS`, `renderSheet()` / `renderArt()`).
 
 ## Firebase data model
 
-Root ref is `challenge`. Five parallel sibling nodes, each keyed `pushId → rowId`:
+Root ref is `challenge`. Six parallel sibling nodes, each keyed `pushId → rowId`:
 
 ```
-challenge/people/<pid>          = "Ann"          (name)
-challenge/entries/<pid>/<rowId> = "Atraxa…"      (commander)
+challenge/people/<pid>          = "Ann"           (name)
+challenge/entries/<pid>/<rowId> = "Atraxa…"       (commander — the Oracle name)
 challenge/stats/<pid>/<rowId>   = {w, l}
-challenge/tags/<pid>/<rowId>    = "poison…"      (free-text description)
-challenge/locks/<pid>/<rowId>   = true           (absent = unlocked)
+challenge/tags/<pid>/<rowId>    = "poison…"       (free-text description)
+challenge/locks/<pid>/<rowId>   = true            (absent = unlocked)
+challenge/prints/<pid>/<rowId>  = {id, name, set} (pinned printing — art only)
 ```
 
-`rowId` is an identity id from `IDENTITIES` (`'gwu'`, `'c'`, `'wubrg'`). Per-person nodes are separate so two people editing at once never clobber each other. **A new per-deck field means a sixth sibling node — and it must also be removed in `removePerson()`, which deletes each node by hand.**
+`rowId` is an identity id from `IDENTITIES` (`'gwu'`, `'c'`, `'wubrg'`). Per-person nodes are separate so two people editing at once never clobber each other. **A new per-deck field means another sibling node — and it must also be deleted in `removePerson()`, which removes each node by hand** ([index.html](index.html:724)).
 
 Auth is one shared account (`CONFIG.sharedEmail`) whose password is the group passphrase; `database.rules.json` grants read+write to any authenticated user. There is no per-user permission model.
 
@@ -56,7 +59,9 @@ Auth is one shared account (`CONFIG.sharedEmail`) whose password is the group pa
 
 - **"Built" deck = row locked AND commander non-empty.** Enforced in both `tally()` and `winRateBoard()`; keep them in agreement.
 - **Two boards answer different questions.** `leaderboard()` ranks players by decks built (never by win rate); `winRateBoard()` ranks decks by `wilsonLower()`, displaying the raw `pct` but sorting on the discounted bound, with `score === null` (no games) parked below a genuine 0%.
-- **Scryfall queries use `id=` (exact), never `id<=`** — subset matching lets mono cards into a 3-color row. See `commanderQuery()`.
+- **The Oracle name is authoritative.** `entries` stores the Oracle name and nothing else; pinning a printing changes the *art only*, so `tally()` and `winRateBoard()` keep operating on one stable string with nothing to migrate. Writing a reskin's printed name into `entries` would break both boards silently. Reskin names surface only in tooltips, via `printInfo()` — which reads `flavor_name` before `printed_name`, because Scryfall uses them for different reskin shapes and reading one misses half of them.
+- **Every Scryfall URL and query string is built in `logic.js`** — `commanderQuery()` (autocomplete), `printsQuery()` (all printings of a card), `imageUrl()` (art, pinned id vs. fuzzy name). Don't re-derive that syntax inline in `index.html`. The worked example: `commanderQuery` uses `id=` (exact), never `id<=`, because subset matching lets mono cards into a 3-color row.
+- **Re-render guards are load-bearing.** `root.on('value')` fires on every remote edit, so both per-person views re-render constantly: `renderSheet()`/`renderArt()` rebuild DOM only when the person changed (`builtFor`), and `renderArt()` assigns `img.src` only when the URL actually changed ([index.html](index.html:628)) — without that, each snapshot re-requests all 32 images. Field values also skip `document.activeElement`, so a live update can't yank the cursor out of what someone is typing.
 - **Player-supplied text goes in via `textContent`, never `innerHTML`.** Commander names and player names are untrusted input.
 - **The mobile `@media (max-width:640px)` block must stay last in `<style>`.** Media queries add no specificity; an equally-specific rule later in the file silently wins (that bug shipped once).
 - `// ponytail:` comments mark deliberate simplifications — a known ceiling, not an oversight.
