@@ -30,6 +30,34 @@ const ciOf = cs => cs.join('').toLowerCase();
 // id= is EXACT. id<= would match subsets (mono/2-colour cards in a 3-colour row) — wrong here.
 const commanderQuery = (ci,q) => `is:commander id=${ci} ${q}`;
 
+// Every printing of one card. !"..." is Scryfall's exact-name match — the caller adds
+// &unique=prints, which is a search parameter rather than query syntax.
+const printsQuery = name => `!"${String(name).trim().replace(/"/g,'')}"`;
+
+// What we store and show for a chosen printing.
+// name: flavor_name is reserved for cards printing two names side by side (the Godzilla
+// treatment); English reflavored prints — Miku as Trostani — carry printed_name instead.
+// Reading only one of them misses half the reskins.
+// set: most printings of a card share one name, so the set and collector number are the
+// only thing that tells plain alternate arts apart. It is a label, not a nicety.
+function printInfo(card={}){
+  return {
+    id: card.id || '',
+    name: card.flavor_name || card.printed_name || card.name || '',
+    set: [card.set_name, card.collector_number && '#'+card.collector_number]
+           .filter(Boolean).join(' '),
+  };
+}
+
+// A pinned printing is addressed by id; without one we fall back to a fuzzy name lookup,
+// which is what every card image did before printings could be chosen.
+function imageUrl(pin, name, version='art_crop'){
+  const base = 'https://api.scryfall.com/cards/';
+  return pin && pin.id
+    ? `${base}${encodeURIComponent(pin.id)}?format=image&version=${version}`
+    : `${base}named?format=image&version=${version}&fuzzy=${encodeURIComponent(name)}`;
+}
+
 function pips(colors){
   return '<div class="pips">' +
     colors.map(k=>`<i class="ms ms-${k.toLowerCase()} ms-cost"></i>`).join('') +
@@ -123,4 +151,4 @@ function winRateBoard(people, entries={}, stats={}, locks={}){
     a.player.localeCompare(b.player) || a.commander.localeCompare(b.commander));
 }
 
-if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups};
+if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,printsQuery,printInfo,imageUrl,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups};

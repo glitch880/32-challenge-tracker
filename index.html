@@ -77,7 +77,7 @@
   .art .group{ font-size:12px; color:var(--faint); text-transform:uppercase; letter-spacing:.06em; margin:18px 0 8px; }
   .art .group:first-child{ margin-top:0; }
   .art .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:10px; }
-  .slot{ border:1px solid var(--border-soft); border-radius:8px; overflow:hidden; cursor:pointer; background:var(--track); }
+  .slot{ position:relative; border:1px solid var(--border-soft); border-radius:8px; overflow:hidden; cursor:pointer; background:var(--track); }
   .slot:hover{ border-color:var(--text); }
   /* 626x457 is Scryfall's art_crop ratio — reserving it stops the grid reflowing as art streams in. */
   .slot img{ display:block; width:100%; aspect-ratio:626/457; object-fit:cover; }
@@ -93,6 +93,30 @@
   .slot.empty .ph, .slot.noart .ph{ display:flex; }
   .slot.empty img, .slot.noart img{ display:none; }
   .slot .ph .ms{ font-size:22px; }
+  .art-btn{ position:absolute; top:6px; right:6px; width:24px; height:24px; padding:0; line-height:1;
+            border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--muted);
+            font-size:12px; cursor:pointer; opacity:.85; }
+  .art-btn:hover{ opacity:1; color:var(--text); border-color:var(--text); }
+  .slot.empty .art-btn{ display:none; }        /* no card, nothing to pick a printing for */
+  .slot.pinned .art-btn{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); opacity:1; }
+  #printpicker{ position:fixed; inset:0; z-index:1100; display:none; align-items:center; justify-content:center;
+                background:rgba(0,0,0,.5); padding:20px; }
+  .picker-box{ display:flex; flex-direction:column; width:100%; max-width:900px; max-height:85vh;
+               background:var(--panel); border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.4); }
+  .picker-head{ display:flex; align-items:center; gap:10px; padding:14px 16px; font-size:14px; font-weight:600;
+                border-bottom:1px solid var(--border-soft); }
+  .picker-head .x{ margin-left:auto; border:none; background:none; color:var(--muted); font-size:18px; cursor:pointer; line-height:1; }
+  .picker-body{ padding:14px 16px; overflow:auto; }
+  .picker-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:10px; }
+  .ptile{ display:block; padding:0; text-align:left; font:inherit; color:var(--text); cursor:pointer;
+          border:1px solid var(--border-soft); border-radius:8px; overflow:hidden; background:var(--track); }
+  .ptile:hover{ border-color:var(--text); }
+  .ptile.active{ border-color:var(--accent); background:var(--done); }
+  .ptile img{ display:block; width:100%; aspect-ratio:626/457; object-fit:cover; }
+  /* Most printings of a card share one name, so the set line is the real label here. */
+  .ptile .pn{ display:block; padding:6px 8px 0; font-size:12px; font-weight:600; }
+  .ptile .ps{ display:block; padding:0 8px 6px; font-size:11px; color:var(--muted); }
+  .ptile.default{ display:flex; align-items:center; justify-content:center; min-height:110px; font-size:13px; color:var(--muted); }
   .slot.built{ background:var(--done); border-color:var(--accent); }
   /* Named but not locked — the deck exists on paper, not on the table yet. */
   .slot.wip img{ filter:saturate(.25); opacity:.7; }
@@ -154,6 +178,8 @@
     .lead .n, .lead .wr{ width:auto; }
     .lead .cmd{ flex:1 1 100%; }      /* commander gets its own line, like the sheet's entry field */
     .art .grid{ grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:8px; }
+    .picker-grid{ grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:8px; }
+    #printpicker{ padding:10px; }
   }
 </style>
 </head>
@@ -176,6 +202,7 @@
   <div id="danger"></div>
 </div>
 <div id="cardpreview"><img alt=""></div>
+<div id="printpicker"></div>
 
 <!-- Firebase (compat build = no bundler needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -187,7 +214,7 @@
      Without them a browser can pair a fresh index.html with a cached copy of one of
      these, and the page breaks in ways that don't announce themselves. -->
 <script src="config.js?v=93227651"></script>
-<script src="logic.js?v=3b7f4046"></script>
+<script src="logic.js?v=16e5e404"></script>
 
 <script>
 // Deployment settings live in config.js (CONFIG); IDENTITIES and the pure helpers in
@@ -211,6 +238,7 @@ let entries = {};     // pushId -> {rowId: text}
 let stats = {};       // pushId -> {rowId: {w,l}}
 let tags = {};        // pushId -> {rowId: text}  (free-text description per deck)
 let locks = {};       // pushId -> {rowId: true}  (locked rows: commander+desc read-only)
+let prints = {};      // pushId -> {rowId: {id,name,set}}  (chosen printing; art only)
 let current = null;   // pushId
 let builtFor = null;  // which pushId the sheet DOM is built for
 let artFor = null;    // which pushId the art DOM is built for
@@ -248,6 +276,7 @@ function checkScripts(){
     ciOf: typeof ciOf, pips: typeof pips, commanderQuery: typeof commanderQuery,
     tally: typeof tally, winPct: typeof winPct, wilsonLower: typeof wilsonLower,
     leaderboard: typeof leaderboard, winRateBoard: typeof winRateBoard,
+    printsQuery: typeof printsQuery, printInfo: typeof printInfo, imageUrl: typeof imageUrl,
   }).filter(([,t])=> t==='undefined').map(([n])=> n);
   if(!missing.length) return;
   $stale.textContent =
@@ -291,6 +320,7 @@ function start(){
     stats = data.stats || {};
     tags = data.tags || {};
     locks = data.locks || {};
+    prints = data.prints || {};
     const ids = Object.keys(people);
     if(current && !ids.includes(current)) current = null;   // removed person -> back to summary
     renderTabs();
@@ -436,8 +466,7 @@ function renderWinRateBoard(list){
   });
 }
 
-const ART_URL = name =>
-  'https://api.scryfall.com/cards/named?format=image&version=art_crop&fuzzy='+encodeURIComponent(name);
+const pinFor = rowId => (prints[current] || {})[rowId] || null;
 
 // Jump from a slot to its row on the sheet — the two views should link, not just coexist.
 function openRow(rowId){
@@ -447,6 +476,92 @@ function openRow(rowId){
   if(!row) return;
   row.scrollIntoView({block:'center', behavior:'smooth'});
   row.querySelector('input.entry').focus();
+}
+
+/* ---- printing picker -------------------------------------------------------------
+   Pinning changes the art only: entries keeps the Oracle name, so the sheet, the
+   win-rate board and the deck count are all untouched by anything in here. */
+const $picker = document.getElementById('printpicker');
+const printCache = new Map();          // name -> card[]; one fetch per card, ever
+
+function closePicker(){ $picker.style.display='none'; $picker.innerHTML=''; }
+$picker.addEventListener('click', e=>{ if(e.target===$picker) closePicker(); });
+addEventListener('keydown', e=>{ if(e.key==='Escape') closePicker(); });
+
+// Apply locally first so the board updates on click; Firebase echoes it back a moment
+// later. info === null unpins, which is a remove() like toggleLock does.
+function pickPrint(rowId, info){
+  prints[current] = prints[current] || {};
+  if(info) prints[current][rowId] = info; else delete prints[current][rowId];
+  closePicker();
+  renderView();
+  if(!root) return;
+  const ref = root.child('prints/'+current+'/'+rowId);
+  (info ? ref.set(info) : ref.remove())
+    .then(()=>{ $status.textContent='saved ✓'; setTimeout(()=>{ if($status.textContent==='saved ✓') $status.textContent=''; },1200); })
+    .catch(()=>{ $status.textContent='save failed — check rules'; });
+}
+
+async function openPrintPicker(rowId){
+  const name = ((entries[current]||{})[rowId]||'').trim();
+  if(!name) return;
+
+  const box=document.createElement('div');
+  box.className='picker-box';
+  box.innerHTML='<div class="picker-head"><span></span><button type="button" class="x">✕</button></div>'+
+                '<div class="picker-body">Loading printings…</div>';
+  box.querySelector('.picker-head span').textContent = 'Printings of '+name;
+  box.querySelector('.x').onclick = closePicker;
+  $picker.innerHTML=''; $picker.appendChild(box);
+  $picker.style.display='flex';
+  const body = box.querySelector('.picker-body');
+
+  let cards = printCache.get(name);
+  if(!cards){
+    try{
+      const r = await fetch('https://api.scryfall.com/cards/search?unique=prints&order=released&q='
+                            + encodeURIComponent(printsQuery(name)));
+      cards = r.ok ? ((await r.json()).data || []) : [];
+    }catch(e){ cards = []; }
+    printCache.set(name, cards);
+  }
+  if($picker.style.display!=='flex') return;   // closed while we were fetching
+
+  body.textContent='';
+  if(!cards.length){
+    // Scryfall matches the card's real name, so a reskin name typed by hand finds nothing.
+    body.innerHTML='<div class="sub">No printings found. This searches the card\'s real name — '+
+                   'if you typed a reskin name, enter the original and pick the reskin here.</div>';
+    return;
+  }
+
+  const pin = pinFor(rowId);
+  const grid=document.createElement('div');
+  grid.className='picker-grid';
+
+  const def=document.createElement('button');
+  def.type='button';
+  def.className='ptile default'+(pin?'':' active');
+  def.textContent='Default printing';
+  def.onclick=()=>pickPrint(rowId, null);
+  grid.appendChild(def);
+
+  cards.forEach(c=>{
+    const info = printInfo(c);
+    if(!info.id) return;
+    const t=document.createElement('button');
+    t.type='button';
+    t.className='ptile'+(pin && pin.id===info.id ? ' active' : '');
+    t.innerHTML='<img alt="" loading="lazy"><span class="pn"></span><span class="ps"></span>';
+    const img=t.querySelector('img');
+    img.onerror=()=>{ img.style.visibility='hidden'; };
+    img.src = imageUrl(info, info.name, 'art_crop');
+    t.querySelector('.pn').textContent = info.name;
+    t.querySelector('.ps').textContent = info.set;
+    t.onclick=()=>pickPrint(rowId, info);
+    grid.appendChild(t);
+  });
+  body.appendChild(grid);
 }
 
 // The same 32 identities as the sheet, drawn as art. Built = locked AND named, the rule
@@ -476,6 +591,12 @@ function renderArt(){
         // leaving a broken-image icon in the grid.
         slot.querySelector('img').onerror = ()=> slot.classList.add('noart');
         slot.onclick = ()=> openRow(idn.id);
+        // Always rendered, not revealed on hover — there is no hover on touch.
+        const art=document.createElement('button');
+        art.type='button'; art.className='art-btn'; art.textContent='◑';
+        art.title='Choose printing';
+        art.onclick=e=>{ e.stopPropagation(); openPrintPicker(idn.id); };  // not openRow
+        slot.appendChild(art);
         grid.appendChild(slot);
       });
       $art.appendChild(grid);
@@ -494,8 +615,13 @@ function renderArt(){
     // Player-supplied text: textContent and the src property, never innerHTML.
     slot.querySelector('.cap b').textContent = name;
     slot.dataset.commander = name;               // the hover preview reads this
+    // The Oracle name stays authoritative in the caption; a pinned printing's own name
+    // and set are secondary context, so they live in the tooltip.
+    const pin = pinFor(slot.dataset.row);
+    slot.classList.toggle('pinned', !!pin);
+    slot.title = pin ? [pin.name, pin.set].filter(Boolean).join(' · ') : '';
     const img = slot.querySelector('img');
-    const want = name ? ART_URL(name) : '';
+    const want = name ? imageUrl(pin, name, 'art_crop') : '';
     // Assign src only when it actually changed. Without this a live snapshot would
     // re-request every image on the board.
     if(img.dataset.want !== want){
@@ -601,6 +727,7 @@ function removePerson(id,name){
   root.child('stats/'+id).remove();
   root.child('tags/'+id).remove();
   root.child('locks/'+id).remove();
+  root.child('prints/'+id).remove();
 }
 
 // Card-art hover preview — one shared floating <img>, delegated on the sheet so it also
@@ -620,14 +747,15 @@ function positionPreview(e){
 // Both views preview the same card, so they share one floating <img>, one timer and one
 // positioner. Delegated on the container so slots and rows built later are still caught.
 // On the art board this is the point: art_crop deliberately omits the rest of the card.
-function bindPreview(container, sel, nameOf){
+// pinOf lets the preview show the printing you actually chose, not Scryfall's default.
+function bindPreview(container, sel, nameOf, pinOf = ()=>null){
   container.addEventListener('mouseover', e=>{
     const el=e.target.closest(sel); if(!el) return;
     const name=(nameOf(el)||'').trim(); if(!name) return;
     positionPreview(e);
     clearTimeout(hoverTimer);
     hoverTimer=setTimeout(()=>{
-      $previewImg.src='https://api.scryfall.com/cards/named?format=image&version=normal&fuzzy='+encodeURIComponent(name);
+      $previewImg.src = imageUrl(pinOf(el), name, 'normal');
       $preview.style.display='block';
     },200);
   });
@@ -638,8 +766,8 @@ function bindPreview(container, sel, nameOf){
     clearTimeout(hoverTimer); $preview.style.display='none';
   });
 }
-bindPreview($sheet, 'input.entry', el=> el.value);
-bindPreview($art,   '.slot',       el=> el.dataset.commander);
+bindPreview($sheet, 'input.entry', el=> el.value,             el=> pinFor(el.dataset.row));
+bindPreview($art,   '.slot',       el=> el.dataset.commander, el=> pinFor(el.dataset.row));
 
 init();
 </script>
