@@ -375,6 +375,27 @@ test('winRateBoard on no people is empty', () => {
 
 const {STAMPED, hashFile, currentStamp} = require('./stamp.js');
 const {CONFIG} = require('./config.js');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const CLAUDE_MD = fs.readFileSync(path.join(__dirname, 'CLAUDE.md'), 'utf8');
+const mdLinks = () => [...CLAUDE_MD.matchAll(/\]\(([^)\s]+)\)/g)].map(m => m[1]);
+
+// CLAUDE.md is loaded into every session, so a wrong claim in it is wrong everywhere. Line
+// anchors are the way it goes wrong silently: any edit above one shifts it and nothing
+// complains. It drifted three PRs running before this test existed.
+test('CLAUDE.md cites names, not line numbers', () => {
+  const numbered = mdLinks().filter(l => /:\d+$/.test(l));
+  assert.deepEqual(numbered, [],
+    'name the function or const instead — a line anchor goes stale on the next edit above it');
+});
+
+test('every file CLAUDE.md links to exists', () => {
+  for(const link of mdLinks()){
+    if(/^[a-z]+:/i.test(link) || link.startsWith('#')) continue;   // external URL or in-page
+    assert.ok(fs.existsSync(path.join(__dirname, link)), `CLAUDE.md links to missing ${link}`);
+  }
+});
 
 for(const file of STAMPED){
   test(`index.html carries the current ${file} hash`, () => {

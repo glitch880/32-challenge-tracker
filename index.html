@@ -658,7 +658,6 @@ function renderSheet(){
       const open=document.createElement('a');
       open.className='deck open'; open.textContent='🔗'; open.hidden=true;
       open.target='_blank'; open.rel='noopener noreferrer';
-      open.onclick=e=>e.stopPropagation();
       row.appendChild(open);
       const edit=document.createElement('button');
       edit.className='deck edit'; edit.type='button'; edit.textContent='🔗';
@@ -687,7 +686,7 @@ function renderSheet(){
   const scur = stats[current] || {};
   const tcur = tags[current] || {};
   const lcur = locks[current] || {};
-  const kcur = links[current] || {};
+  const lnkcur = links[current] || {};
   $sheet.querySelectorAll('.row').forEach(row=>{
     const id = row.dataset.row;
     const inp = row.querySelector('input.entry');
@@ -708,7 +707,7 @@ function renderSheet(){
     // click to open the deck — same rule the commander and description already follow.
     // safeUrl() runs here too, not just at save: it is the last gate before an href, and
     // a value written before this validation existed must not become clickable now.
-    const url = safeUrl(kcur[id]);
+    const url = safeUrl(lnkcur[id]);
     const open = row.querySelector('.deck.open'), edit = row.querySelector('.deck.edit');
     open.hidden = !(locked && url);
     edit.hidden = locked;
@@ -739,6 +738,8 @@ function toggleLock(rowId){
 
 // Stores the normalised href rather than the raw text, so "moxfield.com/x" is saved the
 // same way it would be typed with a scheme, and every reader downstream gets one shape.
+// ponytail: prompt()/alert(), same as addPerson(). Ceiling is no inline editing and no
+// validation until you hit OK — swap for an inline field if that starts to grate.
 function editLink(rowId){
   const cur = (links[current] || {})[rowId] || '';
   const v = prompt('Decklist URL for this deck (Moxfield, Archidekt, …) — clear it to remove:', cur);
