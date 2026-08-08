@@ -66,6 +66,30 @@ const rank = r => r.score===null ? -1 : r.score;
 
 const IDENTITY_BY_ID = Object.fromEntries(IDENTITIES.map(i=>[i.id,i]));
 
+// The challenge's own six categories, in IDENTITIES order — how the original printable
+// sheet groups them, and how the art board lays itself out.
+// Colorless is checked first on purpose: its c is ['C'], length 1, so a plain size test
+// would file it under mono.
+const GROUPS = [
+  ['Colorless',   i=> i.id==='c'],
+  ['Mono',        i=> i.c.length===1],
+  ['Two-color',   i=> i.c.length===2],
+  ['Three-color', i=> i.c.length===3],
+  ['Four-color',  i=> i.c.length===4],
+  ['Five-color',  i=> i.c.length===5],
+];
+
+function identityGroups(list=IDENTITIES){
+  const left = [...list];
+  return GROUPS.map(([label, match])=>{
+    const items = [];
+    for(let n=left.length-1; n>=0; n--){          // walk back so splicing is safe
+      if(match(left[n])) items.unshift(...left.splice(n,1));
+    }
+    return {label, items};
+  });
+}
+
 // Board 1 — one row per player, ranked by progress through the 32.
 function leaderboard(people, entries={}, stats={}, locks={}, total=IDENTITIES.length){
   return Object.entries(people).map(([id,name])=>{
@@ -99,4 +123,4 @@ function winRateBoard(people, entries={}, stats={}, locks={}){
     a.player.localeCompare(b.player) || a.commander.localeCompare(b.commander));
 }
 
-if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard};
+if (typeof module !== 'undefined') module.exports = {IDENTITIES,clampInt,uniq,ciOf,pips,commanderQuery,tally,winPct,wilsonLower,leaderboard,winRateBoard,identityGroups};
